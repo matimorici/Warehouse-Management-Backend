@@ -20,10 +20,7 @@ public class User {
 	   @Id
 	   @Column
 	   private UUID id_usuario;
-	   /*
-	   User u = new User();
-	   u.setIdUsuario(UUID.randomUUID());
-	   */
+
 	   @Column(nullable = false, length = 150)
 	   private String nombre;
 	   
