@@ -17,21 +17,25 @@ import java.util.List;
 @AllArgsConstructor
 
 public class User {
-	   @Id
-	   @Column
-	   private UUID id_usuario;
+	    @Id
+	    @GeneratedValue(strategy = GenerationType.UUID) //genera el UUID
+	    @Column
+	    private UUID id_usuario;
 
-	   @Column(nullable = false, length = 150)
-	   private String nombre;
+	    @Column(nullable = false, length = 150)
+	    private String nombre;
 	   
-	   @Column(nullable = false, length = 150)
-	   private String apellido;
+	    @Column(nullable = false, length = 150)
+	    private String apellido;
 	   
-	   @Column(nullable = false)
-	   private String cuil;
+	    @Column(nullable = false)
+	    private String cuil;
 	   
-	   @Column(nullable = false)
-	   private String rol;
+	    @Column(nullable = false)
+	    private String rol;
+
+	    @Column(nullable = false, length = 255)
+		private String contrasena;
 	   /*
 	   @OneToMany(mappedBy = "operario", fetch = FetchType.LAZY)
 	   private List<Move> moves;

@@ -8,5 +8,5 @@ public class CrearUserRequest {
     private String apellido;
     private String cuil;
     private String rol;
-
+    private String contrasena;
 }
