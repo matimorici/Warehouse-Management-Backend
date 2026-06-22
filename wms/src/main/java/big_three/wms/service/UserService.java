@@ -18,6 +18,11 @@ public class UserService {
     private PasswordEncoder passwordEncoder;
 
     public User create(UserCreateDTO dto) {
+        //validaciones de Negocio
+        if (userRepository.existsByCuil(dto.getCuil())) {
+            throw new IllegalArgumentException("Ya existe un usuario con ese CUIL");
+        }
+
         User u = new User();
         u.setNombre(dto.getNombre());
         u.setApellido(dto.getApellido());

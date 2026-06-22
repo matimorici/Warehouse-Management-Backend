@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 
 @Data
 public class UserCreateDTO {
+        //validaciones de forma
         @NotBlank(message = "El nombre no puede estar vacío")
         @Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
         private String nombre;
@@ -21,8 +22,7 @@ public class UserCreateDTO {
 
         @NotBlank(message = "La contraseña no puede estar vacía")
         @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
-        @Pattern(regexp = ".*[A-Z].*", message = "La contraseña debe contener al menos una mayúscula")
-        @Pattern(regexp = ".*[0-9].*", message = "La contraseña debe contener al menos un número")
+        @Pattern(regexp = "^(?=.*[A-Z])(?=.*[0-9]).{8,}$", message = "La contraseña debe tener al menos 8 caracteres, una mayúscula y un número")
         private String contrasena;
 
 

@@ -19,8 +19,8 @@ import java.util.List;
 public class User {
 	    @Id
 	    @GeneratedValue(strategy = GenerationType.UUID) //genera el UUID
-	    @Column
-	    private UUID id_usuario;
+	    @Column(name="id_usuario") //nombre de la columna con snake_case en la db
+	    private UUID idUsuario;// nombre en camel case en el objeto
 
 	    @Column(nullable = false, length = 150)
 	    private String nombre;
@@ -32,7 +32,7 @@ public class User {
 	    private String cuil;
 	   
 	    @Column(nullable = false)
-	    private String rol = "Operario";
+	    private String rol = "OPERARIO";
 
 	    @Column(nullable = false, length = 255)
 		private String contrasena;
