@@ -1,6 +1,7 @@
 package big_three.wms.service;
 
 import big_three.wms.model.User;
+import big_three.wms.dto.UserCreateDTO;
 import big_three.wms.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,13 +17,12 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    public User crear(String nombre, String apellido, String cuil, String rol, String contrasena) {
+    public User create(UserCreateDTO dto) {
         User u = new User();
-        u.setNombre(nombre);
-        u.setApellido(apellido);
-        u.setCuil(cuil);
-        u.setRol(rol);
-        u.setContrasena(passwordEncoder.encode(contrasena));
+        u.setNombre(dto.getNombre());
+        u.setApellido(dto.getApellido());
+        u.setCuil(dto.getCuil());
+        u.setContrasena(passwordEncoder.encode(dto.getContrasena()));
         return userRepository.save(u);
     }
 

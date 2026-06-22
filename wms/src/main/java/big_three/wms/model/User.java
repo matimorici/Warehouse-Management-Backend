@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 /*
 import java.util.List;
-@ToString(exclude = "PickUpOrder")        // exclude relation fields
+@ToString(exclude = "PickUpOrder") // exclude relation fields
 @EqualsAndHashCode(exclude = "PickUpOrder")
 */
 @Entity
@@ -32,7 +32,7 @@ public class User {
 	    private String cuil;
 	   
 	    @Column(nullable = false)
-	    private String rol;
+	    private String rol = "Operario";
 
 	    @Column(nullable = false, length = 255)
 		private String contrasena;
