@@ -20,7 +20,7 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    public User create(UserCreateDTO dto) {
+    public UserResponseDTO create(UserCreateDTO dto) {
         //validaciones de Negocio
         if (userRepository.existsByCuil(dto.getCuil())) {
             throw new IllegalArgumentException("Ya existe un usuario con ese CUIL" + dto.getCuil());
