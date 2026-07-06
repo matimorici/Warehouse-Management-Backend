@@ -18,9 +18,9 @@ import java.util.List;
 
 public class User {
 	    @Id
-	    @GeneratedValue(strategy = GenerationType.UUID) //genera el UUID
+	    @GeneratedValue(strategy = GenerationType.IDENTITY) //genera el ID AI
 	    @Column(name="id_usuario") //nombre de la columna con snake_case en la db
-	    private UUID idUsuario;// nombre en camel case en el objeto
+	    private Long idUsuario;// nombre en camel case en el objeto
 
 	    @Column(nullable = false, length = 150)
 	    private String nombre;

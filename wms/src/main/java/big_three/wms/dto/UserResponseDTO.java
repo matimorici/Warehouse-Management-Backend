@@ -8,7 +8,7 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserResponseDTO {
-    UUID idUsuario;
+    Long idUsuario;
     String nombre;
     String apellido;
     String cuil;
