@@ -8,10 +8,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductResponseDTO {
-    Long idProducto;
-    String nombreProducto;
-    String descripcionProducto;
-    String codigoBarras;
-    Long idProveedor;
-    String origenCodigoBarras;
+    private Long idProducto;
+    private String nombreProducto;
+    private String descripcionProducto;
+    private String codigoBarras;
+    private Long idProveedor;
+    private String origenCodigoBarras;
 }

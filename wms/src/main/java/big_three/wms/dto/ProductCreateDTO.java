@@ -7,28 +7,22 @@ import lombok.Data;
 
 @Data
 public class ProductCreateDTO {
-        //validaciones de forma
-        @NotBlank(message = "El nombre no puede estar vacío")
+
+        @NotBlank(message = "El nombre del producto no puede estar vacío")
         @Size(min = 3, max = 150, message = "El nombre debe tener entre 3 y 150 caracteres")
         private String nombreProducto;
 
-        @NotBlank(message = "El apellido no puede estar vacío")
-        @Size(min = 3, max = 150, message = "El apellido debe tener entre 3 y 150 caracteres")
+        @NotBlank(message = "La descripción no puede estar vacía")
+        @Size(min = 3, max = 500, message = "La descripción debe tener entre 3 y 500 caracteres")
         private String descripcionProducto;
 
-        @NotBlank(message = "El CUIL no puede estar vacío")
-        @Pattern(regexp = "\\d{2}-\\d{8}-\\d{1}|\\d{11}", message = "El CUIL no tiene un formato válido (ej: 20-12345678-9)")
+        @Size(max = 50, message = "El código de barras no puede superar los 50 caracteres")
         private String codigoBarras;
 
-        @NotBlank(message = "El CUIL no puede estar vacío")
-        @Pattern(regexp = "\\d{2}-\\d{8}-\\d{1}|\\d{11}", message = "El CUIL no tiene un formato válido (ej: 20-12345678-9)")
-        private String idProveedor;
+        private Long idProveedor;
 
-
-
-        @NotBlank(message = "El CUIL no puede estar vacío")
-        @Pattern(regexp = "\\d{2}-\\d{8}-\\d{1}|\\d{11}", message = "El CUIL no tiene un formato válido (ej: 20-12345678-9)")
+        @NotBlank(message = "El origen del código de barras es obligatorio")
+        @Pattern(regexp = "FABRICANTE|INTERNO", message = "El origen debe ser FABRICANTE o INTERNO")
         private String origenCodigoBarras;
-
 
 }

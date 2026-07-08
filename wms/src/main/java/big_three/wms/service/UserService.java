@@ -4,26 +4,27 @@ import big_three.wms.model.User;
 import big_three.wms.dto.UserCreateDTO;
 import big_three.wms.dto.UserResponseDTO;
 import big_three.wms.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 
 @Service
 public class UserService {
 
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
 
     public UserResponseDTO create(UserCreateDTO dto) {
         //validaciones de Negocio
         if (userRepository.existsByCuil(dto.getCuil())) {
-            throw new IllegalArgumentException("Ya existe un usuario con ese CUIL" + dto.getCuil());
+            throw new IllegalArgumentException("Ya existe un usuario con ese CUIL: " + dto.getCuil());
         }
 
         User u = new User();
@@ -43,13 +44,13 @@ public class UserService {
     }
 
     // Retorna un DTO de respuesta o lanza error
-    public UserResponseDTO findById(UUID id) {
+    public UserResponseDTO findById(Long id) {
         User u = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         return convertToResponseDTO(u);
     }
 
-    public void deleteById(UUID id) {
+    public void deleteById(Long id) {
         if (!userRepository.existsById(id)) {
             throw new RuntimeException("Usuario no encontrado para eliminar");
         }

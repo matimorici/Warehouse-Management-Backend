@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/usuarios")
@@ -34,12 +33,12 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponseDTO> search(@PathVariable UUID id) {
+    public ResponseEntity<UserResponseDTO> search(@PathVariable Long id) {
         return ResponseEntity.ok(userService.findById(id));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         userService.deleteById(id);
         return ResponseEntity.noContent().build();
     }

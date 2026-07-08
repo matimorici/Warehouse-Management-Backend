@@ -1,6 +1,5 @@
 package big_three.wms.model;
 
-import java.util.UUID;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;

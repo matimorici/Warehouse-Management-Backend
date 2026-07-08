@@ -1,5 +1,5 @@
 package big_three.wms.dto;
-import java.util.UUID;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -8,9 +8,9 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserResponseDTO {
-    Long idUsuario;
-    String nombre;
-    String apellido;
-    String cuil;
-    String rol;
+    private Long idUsuario;
+    private String nombre;
+    private String apellido;
+    private String cuil;
+    private String rol;
 }
