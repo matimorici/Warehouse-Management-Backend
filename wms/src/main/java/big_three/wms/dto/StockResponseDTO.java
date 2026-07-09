@@ -8,14 +8,9 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProductResponseDTO {
+public class StockResponseDTO {
     private Long idProducto;
-    private String nombreProducto;
-    private String descripcionProducto;
-    private String codigoBarras;
-    private Long idProveedor;
-    private String origenCodigoBarras;
+    private LocalDateTime fechaHora;
     private Integer cantidadDisponible;
     private Integer cantidadPendiente;
-    private LocalDateTime stockFechaHora;
 }
