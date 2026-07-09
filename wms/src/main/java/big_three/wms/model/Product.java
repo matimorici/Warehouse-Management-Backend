@@ -33,7 +33,7 @@ public class Product {
     @Column(name="id_proveedor")
     private Long idProveedor;
 
-    @Column(name = "origen_codigo", nullable = false)
+    @Column(name = "origen_codigo_barras", nullable = false)
     @Enumerated(EnumType.STRING) // hace que se guarde el texto literal del valor seleccionado en la base de datos en lugar de valores como 1 y 0
     private OrigenCodigoBarras origenCodigoBarras; // FABRICANTE o INTERNO
 
