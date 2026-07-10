@@ -2,6 +2,8 @@ package big_three.wms.controller;
 
 import big_three.wms.dto.ProductCreateDTO;
 import big_three.wms.dto.ProductResponseDTO;
+import big_three.wms.dto.StockResponseDTO;
+import big_three.wms.dto.StockUpdateDTO;
 import big_three.wms.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -48,5 +50,16 @@ public class ProductController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         productService.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/stock")
+    public ResponseEntity<StockResponseDTO> getStock(@PathVariable Long id) {
+        return ResponseEntity.ok(productService.findStockByIdProducto(id));
+    }
+
+    @PutMapping("/{id}/stock")
+    public ResponseEntity<StockResponseDTO> updateStock(@PathVariable Long id,
+            @Valid @RequestBody StockUpdateDTO dto) {
+        return ResponseEntity.ok(productService.updateStock(id, dto));
     }
 }

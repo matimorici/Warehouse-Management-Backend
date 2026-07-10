@@ -6,6 +6,8 @@ import big_three.wms.model.Proveedor;
 import big_three.wms.model.Stock;
 import big_three.wms.dto.ProductCreateDTO;
 import big_three.wms.dto.ProductResponseDTO;
+import big_three.wms.dto.StockResponseDTO;
+import big_three.wms.dto.StockUpdateDTO;
 import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.ProveedorRepository;
 import big_three.wms.repository.StockRepository;
@@ -152,5 +154,41 @@ public class ProductService {
             throw new RuntimeException("Producto no encontrado para eliminar");
         }
         productRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void ajustarStock(Long idProducto, int deltaDisponible, int deltaPendiente) {
+        Stock stock = stockRepository.findById(idProducto)
+                .orElseThrow(() -> new RuntimeException("Stock no encontrado para producto " + idProducto));
+        if (stock.getCantidadDisponible() + deltaDisponible < 0) {
+            throw new RuntimeException("Stock disponible insuficiente para producto " + idProducto);
+        }
+        stock.setCantidadDisponible(stock.getCantidadDisponible() + deltaDisponible);
+        stock.setCantidadPendiente(stock.getCantidadPendiente() + deltaPendiente);
+        stock.setFechaHora(LocalDateTime.now());
+        stockRepository.save(stock);
+    }
+
+    public StockResponseDTO findStockByIdProducto(Long idProducto) {
+        Stock stock = stockRepository.findById(idProducto)
+                .orElseThrow(() -> new RuntimeException("Stock no encontrado para producto " + idProducto));
+        return new StockResponseDTO(stock.getIdProducto(), stock.getFechaHora(),
+                stock.getCantidadDisponible(), stock.getCantidadPendiente());
+    }
+
+    @Transactional
+    public StockResponseDTO updateStock(Long idProducto, StockUpdateDTO dto) {
+        Stock stock = stockRepository.findById(idProducto)
+                .orElseThrow(() -> new RuntimeException("Stock no encontrado para producto " + idProducto));
+        if (dto.getCantidadDisponible() != null) {
+            stock.setCantidadDisponible(dto.getCantidadDisponible());
+        }
+        if (dto.getCantidadPendiente() != null) {
+            stock.setCantidadPendiente(dto.getCantidadPendiente());
+        }
+        stock.setFechaHora(LocalDateTime.now());
+        stockRepository.save(stock);
+        return new StockResponseDTO(stock.getIdProducto(), stock.getFechaHora(),
+                stock.getCantidadDisponible(), stock.getCantidadPendiente());
     }
 }

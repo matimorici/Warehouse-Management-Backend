@@ -24,15 +24,18 @@ public class PickOrderService {
     private final PickOrderLineRepository pickOrderLineRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
+    private final ProductService productService;
 
     public PickOrderService(PickOrderRepository pickOrderRepository,
             PickOrderLineRepository pickOrderLineRepository,
             UserRepository userRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            ProductService productService) {
         this.pickOrderRepository = pickOrderRepository;
         this.pickOrderLineRepository = pickOrderLineRepository;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
+        this.productService = productService;
     }
 
     @Transactional
@@ -57,6 +60,11 @@ public class PickOrderService {
             line.setIdProducto(lineaRetiro.getIdProducto());
             line.setCantidad(lineaRetiro.getCantidad());
             pickOrderLineRepository.save(line);
+        }
+
+        for (PickOrderLineCreateDTO lineaRetiro : dto.getLineasRetiro()) {
+            productService.ajustarStock(lineaRetiro.getIdProducto(),
+                    -lineaRetiro.getCantidad(), lineaRetiro.getCantidad());
         }
 
         return buildResponse(savedOrder);
@@ -92,6 +100,12 @@ public class PickOrderService {
         order.setIdUsuario(dto.getIdUsuario());
         pickOrderRepository.save(order);
 
+        List<PickOrderLine> oldLines = pickOrderLineRepository.findByIdOrdenRetiro(id);
+        for (PickOrderLine oldLine : oldLines) {
+            productService.ajustarStock(oldLine.getIdProducto(),
+                    oldLine.getCantidad(), -oldLine.getCantidad());
+        }
+
         pickOrderLineRepository.findByIdOrdenRetiro(id)
                 .forEach(line -> pickOrderLineRepository.deleteById(
                         new PickOrderLine.PickOrderLineId(line.getIdOrdenRetiro(), line.getIdProducto())));
@@ -104,6 +118,11 @@ public class PickOrderService {
             pickOrderLineRepository.save(line);
         }
 
+        for (PickOrderLineCreateDTO lineaRetiro : dto.getLineasRetiro()) {
+            productService.ajustarStock(lineaRetiro.getIdProducto(),
+                    -lineaRetiro.getCantidad(), lineaRetiro.getCantidad());
+        }
+
         return buildResponse(order);
     }
 
@@ -111,6 +130,11 @@ public class PickOrderService {
     public void deleteById(Long id) {
         if (!pickOrderRepository.existsById(id)) {
             throw new RuntimeException("Orden de retiro no encontrada");
+        }
+        List<PickOrderLine> lines = pickOrderLineRepository.findByIdOrdenRetiro(id);
+        for (PickOrderLine line : lines) {
+            productService.ajustarStock(line.getIdProducto(),
+                    line.getCantidad(), -line.getCantidad());
         }
         pickOrderLineRepository.findByIdOrdenRetiro(id)
                 .forEach(line -> pickOrderLineRepository.deleteById(
