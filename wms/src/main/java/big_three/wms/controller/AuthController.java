@@ -20,10 +20,10 @@ public class AuthController {
 
     public AuthController(UserService userService) {
         this.userService = userService;
-    }
+    } //constructor
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO dto) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO dto) { // el <?> preparar al metodo para recibir cualquier tipo de dato
         try {
             UserResponseDTO response = userService.login(dto);
             return ResponseEntity.ok(response);
