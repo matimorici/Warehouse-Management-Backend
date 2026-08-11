@@ -21,7 +21,7 @@ public class PickOrderController {
         this.pickOrderService = pickOrderService;
     }
 
-    @PostMapping
+        @PostMapping
     public ResponseEntity<PickOrderResponseDTO> create(@Valid @RequestBody PickOrderCreateDTO dto) {
         PickOrderResponseDTO response = pickOrderService.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
