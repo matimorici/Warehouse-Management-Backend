@@ -19,9 +19,9 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 
 - **Package**: `big_three.wms`, entrypoint `WmsApplication.java` (port 8080).
 - **DB**: PostgreSQL `wms_db` on `localhost:5432`, user `postgres`, password `12345` (hardcoded in `application.properties`). `ddl-auto=validate` — schema must exist externally; the source of truth is `src/main/resources/sql/wms_schema.sql` (create DB, `\i` the script). `show-sql=true`, `open-in-view=false`.
-- **No test profile / H2 override** — `@SpringBootTest` hits real PostgreSQL. `h2` and `mysql-connector-j` are in `pom.xml` but unused.
+- **No test profile / H2 override** — `@SpringBootTest` hits real PostgreSQL. `h2`/`mysql-connector-j` were removed from `pom.xml` (PostgreSQL only); only `postgresql` runtime driver remains.
 - **Frontend CORS**: `http://localhost:4200` (Angular), set per-controller via `@CrossOrigin`.
-- **Libraries**: ZXing 3.5.3 (barcode generation) declared but not used anywhere yet. Lombok excluded from final artifact by `spring-boot-maven-plugin`.
+- **Libraries**: ZXing 3.5.3 (barcode generation) declared but not used anywhere yet — kept intentionally for a planned feature. Lombok excluded from final artifact by `spring-boot-maven-plugin`.
 - `wms/doc/` contains generated Javadoc — ignore it.
 
 ## Security
@@ -31,10 +31,9 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 - `POST /api/usuarios` and `GET /api/usuarios` → `permitAll`
 - `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**` → `permitAll`
 - Everything else → `anyRequest().authenticated()`, including:
-  - `POST /api/usuarios/login` — **requires auth even though it's the login endpoint** (bug, see Known issues)
   - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
 
-There is no `UserDetailsService`, JWT, session management, or token mechanism. The app has no real authentication flow; `authenticated()` paths are effectively unreachable.
+There is no `UserDetailsService`, JWT, session management, or token mechanism. The app has no real authentication flow; `authenticated()` paths are effectively unreachable. The only login endpoint is `POST /api/auth/login` (permitted) — the old duplicate `POST /api/usuarios/login` was removed.
 
 ## Project structure
 
@@ -47,8 +46,7 @@ wms/src/main/java/big_three/wms/
 ├── exception/InvalidCredentialsException.java
 ├── model/                     # User, Product, Proveedor, Stock, PickOrder, PickOrderLine
 ├── repository/                # 6 Spring Data JPA repositories
-├── service/                   # UserService, ProductService, ProveedorService, PickOrderService
-└── util/Validations.java      # empty placeholder
+└── service/                   # UserService, ProductService, ProveedorService, PickOrderService
 ```
 
 ## Entities (6)
@@ -59,7 +57,7 @@ wms/src/main/java/big_three/wms/
 | `Product` | `producto` | `id_producto` (Long, IDENTITY) | `@ManyToOne` → `Proveedor` |
 | `Proveedor` | `proveedor` | `id_proveedor` (Long, IDENTITY) | — |
 | `Stock` | `stock` | `id_producto` (Long, no auto-gen) | 1:1 with `Product` (same PK, FK `ON DELETE CASCADE` in schema) |
-| `PickOrder` | `orden_retiro` | `id_orden_retiro` (Long, IDENTITY) | `idUsuario` stored as raw `Long` (no `@ManyToOne`, no FK) |
+| `PickOrder` | `orden_retiro` | `id_orden_retiro` (Long, IDENTITY) | `idUsuario` stored as raw `Long` (no `@ManyToOne`, no JPA FK) — **intentional**, see Known issues #4 |
 | `PickOrderLine` | `linea_retiro` | `@IdClass(PickOrderLineId)`: `id_orden_retiro` + `id_producto` | Composite PK |
 
 - `Product` has inner enum `OrigenCodigoBarras { FABRICANTE, INTERNO }` (mapped `@Enumerated(EnumType.STRING)`).
@@ -69,10 +67,9 @@ wms/src/main/java/big_three/wms/
 
 ## Business logic (important)
 
-- **Product create** (`ProductService.create`): if `codigoBarras` is provided and unique → `origen = FABRICANTE`; if blank/null → generates `INT-XXXXXX` via `nextval('codigo_interno_seq')` and `origen = INTERNO`. Also creates a `Stock` row (defaults to 0). Duplicate barcode → `IllegalArgumentException`.
-  - **Gotcha**: `codigo_interno_seq` is queried in `ProductRepository.obtenerSiguienteSecuencia()` but **is not created by `wms_schema.sql`** — creating a product with no barcode fails until the sequence exists in the DB.
+- **Product create** (`ProductService.create`): if `codigoBarras` is provided and unique → `origen = FABRICANTE`; if blank/null → generates `INT-XXXXXX` via `nextval('codigo_interno_seq')` and `origen = INTERNO`. Also creates a `Stock` row (defaults to 0). Duplicate barcode → `IllegalArgumentException`. The sequence is created by `wms_schema.sql` (`codigo_interno_seq`).
 - **Product update** (`update`): also upserts the `Stock` row (creates with 0s if missing). Existing product + no new barcode keeps its barcode/origen.
-- **Product delete** (`deleteById`): deletes only the `Product`; the `Stock` row is left behind as an orphan (bug — do not reintroduce; a "fix" must be deliberate).
+- **Product delete** (`deleteById`): deletes the `Stock` row first (if present), then the `Product` — no orphans.
 - **PickOrder create** (`PickOrderService.create`): validates `idUsuario` and every `idProducto` exist, saves order + lines, then calls `productService.ajustarStock(idProducto, -cantidad, +cantidad)` → `disponible -= cantidad`, `pendiente += cantidad`; throws if `disponible` would go negative.
 - **PickOrder update** (`update`): reverses old lines' stock, deletes old lines, saves new lines, applies new stock deltas. Known stale-data risk (see Known issues).
 - **PickOrder delete** (`deleteById`): reverts stock (`+cantidad` disponible, `-cantidad` pendiente), deletes lines, deletes order.
@@ -88,14 +85,13 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 | Method | Path | Auth | Body | Returns |
 |--------|------|------|------|---------|
 | POST | `/api/usuarios` | No | `UserCreateDTO`: `nombre`, `apellido`, `cuil` (`20-12345678-9` or 11 digits), `contrasena` (≥8, 1 uppercase, 1 digit) | 201 `UserResponseDTO` |
-| POST | `/api/usuarios/login` | **Yes (bug)** | `LoginRequestDTO`: `cuil`, `contrasena` | 200 `UserResponseDTO` / 401 `{error}` |
 | GET | `/api/usuarios` | No | — | `List<UserResponseDTO>` |
 | GET | `/api/usuarios/{id}` | Yes | — | `UserResponseDTO` |
 | DELETE | `/api/usuarios/{id}` | Yes | — | 204 |
 
 `UserResponseDTO`: `idUsuario`, `nombre`, `apellido`, `cuil`, `rol`.
 
-### Auth — `AuthController` (duplicate of `/api/usuarios/login`)
+### Auth — `AuthController` (canonical login endpoint)
 
 | Method | Path | Auth | Body | Returns |
 |--------|------|------|------|---------|
@@ -137,28 +133,29 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 
 ## Error handling
 
-- **No `@ControllerAdvice`** — no global exception handler.
-- `RuntimeException` → 500 with raw message (e.g. "Producto no encontrado").
-- `IllegalArgumentException` → 500 too (not 400), except when caught: only `InvalidCredentialsException` is handled, and only in the two login controllers → 401 `{ "error": message }`.
+- `GlobalExceptionHandler` (`exception/GlobalExceptionHandler.java`) is the single `@ControllerAdvice` for unhandled exceptions, always responding `{ "error": message }`:
+  - `InvalidCredentialsException` → 401
+  - `IllegalArgumentException` (duplicate CUIL/CUIT/barcode) → 400
+  - `RuntimeException` (e.g. "Producto no encontrado") → 500
 - Bean Validation failures → 400 with Spring's default field-error structure.
 - `InvalidCredentialsException` exists solely for login; the duplicate-email/duplicate-CUIL/duplicate-barcode checks throw `IllegalArgumentException`.
 
 ## Known issues (do not reintroduce)
 
-1. **Orphan Stock on Product delete** (`ProductService.deleteById`, `ProductService.java:152`): deletes the product but not its `Stock` row — leaves orphans.
-2. **Duplicate login endpoints**: `POST /api/usuarios/login` (UserController) and `POST /api/auth/login` (AuthController) do the same thing.
-3. **N+1 query** (`ProductService.findAll`, `ProductService.java:135`): per-product `stockRepository.findById()` — no `JOIN FETCH`/`@EntityGraph`.
-4. **PickOrder.idUsuario is raw Long** (`PickOrder.java:25`): no JPA-level referential integrity with `User`.
-5. **Empty Validations class** (`util/Validations.java`): placeholder with no methods.
-6. **Dead code in User.java** (`model/User.java`): commented-out `@OneToMany` referencing non-existent `Move` and `PickUpOrder` entities.
-7. **No global exception handler**: no `@ControllerAdvice` — unhandled exceptions produce raw 500s.
-8. **Unused dependencies in pom.xml**: `h2` and `mysql-connector-j`.
+1. ~~**Orphan Stock on Product delete**~~ **FIXED**: `ProductService.deleteById` deletes the `Stock` row (if present) before the `Product`.
+2. ~~**Duplicate login endpoints**~~ **FIXED**: `UserController.login` (`POST /api/usuarios/login`) removed; `AuthController` `POST /api/auth/login` is the single login endpoint.
+3. ~~**N+1 query** (`ProductService.findAll`, `ProductService.java:135`)~~ **FIXED**: `findAll` now batch-fetches all `Stock` rows in one query and maps by `idProducto` (2 queries total).
+4. **PickOrder.idUsuario is raw Long** (`PickOrder.java:25`): no JPA-level referential integrity with `User`. — **INTENTIONAL** (see TODO item 17): the DB FK is the only guard; mapping a `@ManyToOne` would force lazy-loading `User` when building responses, conflicting with `open-in-view=false` and rippling into `PickOrderResponseDTO`/`PickOrderService`. Revisit if order responses ever need the user object.
+5. ~~**Empty Validations class**~~ **FIXED**: `util/Validations.java` deleted (no callers).
+6. ~~**Dead code in User.java**~~ **FIXED**: commented-out `@OneToMany` blocks and stale header comments removed from `model/User.java`.
+7. ~~**No global exception handler**~~ **FIXED**: `GlobalExceptionHandler` `@ControllerAdvice` maps `InvalidCredentialsException` → 401, `IllegalArgumentException` → 400, `RuntimeException` → 500.
+8. ~~**Unused dependencies in pom.xml**~~ **FIXED**: `h2` and `mysql-connector-j` removed — only PostgreSQL is used. (Note: ZXing stays — kept intentionally for planned barcode generation.)
 9. **No real authentication**: login returns a DTO but no token/session; `authenticated()` endpoints are unreachable.
 10. **Single test** (`WmsApplicationTests.contextLoads()`): no test profile, no integration/unit tests.
-11. **PickOrderService.update() stale data risk** (`PickOrderService.java`): re-fetches lines after reversing stock to delete them — second fetch may return stale data.
+11. ~~**PickOrderService.update() stale data risk** (`PickOrderService.java`)~~ **FIXED**: `update`/`deleteById` reuse the already-fetched line list (`deleteAll(lines)`) instead of re-querying after the stock reversal.
 12. **Test hits real DB**: `@SpringBootTest` connects to PostgreSQL — no H2/test override.
-13. **Login endpoint requires auth**: `SecurityConfig` `permitAll("/api/usuarios")` doesn't cover `/api/usuarios/login`, so it falls into `anyRequest().authenticated()` — the login endpoint is unreachable with no auth mechanism present.
-14. **`codigo_interno_seq` missing from schema**: `ProductRepository` uses `nextval('codigo_interno_seq')` but `wms_schema.sql` never creates the sequence — barcode-less product creation fails on a fresh DB.
+13. ~~**Login endpoint requires auth**~~ **FIXED**: `SecurityConfig` `permitAll("/api/usuarios")` didn't cover `/api/usuarios/login`, so login fell into `anyRequest().authenticated()`. The duplicate `/api/usuarios/login` endpoint was removed entirely; login lives at the permitted `POST /api/auth/login`.
+14. ~~**`codigo_interno_seq` missing from schema**~~ **FIXED**: `wms_schema.sql` now creates the sequence (see TODO item 2 for applying to existing DBs).
 
 ## Work rules
 

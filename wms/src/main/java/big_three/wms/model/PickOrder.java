@@ -23,5 +23,11 @@ public class PickOrder {
     private LocalDateTime fechaHora;
 
     @Column(name = "id_usuario", nullable = false)
+    // Decisión deliberada: se guarda como Long crudo y NO se mapea una relación @ManyToOne a User.
+    // Motivo: la FK existe a nivel de BD (wms_schema.sql), y mapearla en JPA obligaría a cargar el
+    // usuario (lazy) al armar las respuestas — inviable con open-in-view=false y sin fetch explícito
+    // en buildResponse/buildSummary — y tocaría PickOrderResponseDTO/PickOrderService de forma riesgosa.
+    // Posible conflicto a futuro: sin integridad referencial a nivel JPA, un idUsuario inexistente pasa
+    // el guardado; hoy lo valida PickOrderService contra UserRepository, pero la BD sigue siendo la única garantía.
     private Long idUsuario;
 }

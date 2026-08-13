@@ -250,13 +250,25 @@ class ProductServiceTest {
     }
 
     @Test
-    void deleteById_deletesProductButNotStock() {
+    void deleteById_deletesProductAndStock() {
         when(productRepository.existsById(1L)).thenReturn(true);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
 
         productService.deleteById(1L);
 
+        verify(stockRepository).delete(any(Stock.class));
         verify(productRepository).deleteById(1L);
-        verifyNoInteractions(stockRepository);
+    }
+
+    @Test
+    void deleteById_noStockRow_stillDeletesProduct() {
+        when(productRepository.existsById(1L)).thenReturn(true);
+        when(stockRepository.findById(1L)).thenReturn(Optional.empty());
+
+        productService.deleteById(1L);
+
+        verify(stockRepository, never()).delete(any());
+        verify(productRepository).deleteById(1L);
     }
 
     @Test
@@ -317,13 +329,14 @@ class ProductServiceTest {
         product.setProveedor(proveedor(1L));
         product.setOrigenCodigoBarras(OrigenCodigoBarras.FABRICANTE);
         when(productRepository.findAll()).thenReturn(List.of(product));
-        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
+        when(stockRepository.findAll()).thenReturn(List.of(stock(1L, 5, 3)));
 
         List<ProductResponseDTO> response = productService.findAll();
 
         assertEquals(1, response.size());
         assertEquals(5, response.get(0).getCantidadDisponible());
         assertEquals(3, response.get(0).getCantidadPendiente());
+        verify(stockRepository, never()).findById(any());
     }
 
     @Test

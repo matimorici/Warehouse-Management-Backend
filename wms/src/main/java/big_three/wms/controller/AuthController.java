@@ -2,14 +2,10 @@ package big_three.wms.controller;
 
 import big_three.wms.dto.LoginRequestDTO;
 import big_three.wms.dto.UserResponseDTO;
-import big_three.wms.exception.InvalidCredentialsException;
 import big_three.wms.service.UserService;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -20,16 +16,11 @@ public class AuthController {
 
     public AuthController(UserService userService) {
         this.userService = userService;
-    } //constructor
+    }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO dto) { // el <?> preparar al metodo para recibir cualquier tipo de dato
-        try {
-            UserResponseDTO response = userService.login(dto);
-            return ResponseEntity.ok(response);
-        } catch (InvalidCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<UserResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto) {
+        UserResponseDTO response = userService.login(dto);
+        return ResponseEntity.ok(response);
     }
 }

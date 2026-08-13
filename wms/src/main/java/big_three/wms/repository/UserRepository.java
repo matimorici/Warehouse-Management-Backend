@@ -2,7 +2,6 @@ package big_three.wms.repository;
 
 import big_three.wms.model.User;
 import org.springframework.data.jpa.repository.JpaRepository; // incluye save(), findAll(), findById(), deleteById() básicos, no conoce los campos específicos del objeto para armar el resto de posibles consultas
-import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -11,5 +10,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByCuil(String cuil);
 
      Optional<User> findByCuil(String cuil);
-     List<User> findByRol(String rol);
 }

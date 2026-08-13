@@ -15,6 +15,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -133,12 +134,11 @@ public class ProductService {
     }
 
     public List<ProductResponseDTO> findAll() {
+        Map<Long, Stock> stockById = stockRepository.findAll().stream()
+                .collect(Collectors.toMap(Stock::getIdProducto, stock -> stock));
         return productRepository.findAll()
                 .stream()
-                .map(p -> {
-                    Stock stock = stockRepository.findById(p.getIdProducto()).orElse(null);
-                    return convertToResponseDTO(p, stock);
-                })
+                .map(p -> convertToResponseDTO(p, stockById.get(p.getIdProducto())))
                 .collect(Collectors.toList());
     }
 
@@ -149,10 +149,12 @@ public class ProductService {
         return convertToResponseDTO(p, stock);
     }
 
+    @Transactional
     public void deleteById(Long id) {
         if (!productRepository.existsById(id)) {
             throw new RuntimeException("Producto no encontrado para eliminar");
         }
+        stockRepository.findById(id).ifPresent(stock -> stockRepository.delete(stock));
         productRepository.deleteById(id);
     }
 

@@ -73,6 +73,16 @@ class PickOrderControllerTest {
     }
 
     @Test
+    void create_emptyLineas_returns400() throws Exception {
+        mockMvc.perform(post("/api/ordenes-retiro")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"idUsuario": 1, "lineasRetiro": []}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void list_returns200() throws Exception {
         when(pickOrderService.findAllSummaries()).thenReturn(List.of(response()));
 

@@ -15,7 +15,6 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -73,16 +72,5 @@ class UserControllerTest {
         mockMvc.perform(get("/api/usuarios"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].nombre").value("Juan"));
-    }
-
-    @Test
-    void login_requiresAuthentication() throws Exception {
-        mockMvc.perform(post("/api/usuarios/login")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"cuil": "20-12345678-9", "contrasena": "Password1"}
-                                """))
-                .andExpect(status().isForbidden());
     }
 }

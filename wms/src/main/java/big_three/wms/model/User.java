@@ -4,11 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-/*
-import java.util.List;
-@ToString(exclude = "PickUpOrder") // exclude relation fields
-@EqualsAndHashCode(exclude = "PickUpOrder")
-*/
+
 @Entity
 @Table(name = "usuario")
 @Data
@@ -27,7 +23,7 @@ public class User {
 	    @Column(nullable = false, length = 150)
 	    private String apellido;
 	   
-	    @Column(nullable = false)
+	    @Column(nullable = false, length = 20)
 	    private String cuil;
 	   
 	    @Column(nullable = false)
@@ -35,12 +31,4 @@ public class User {
 
 	    @Column(nullable = false, length = 255)
 		private String contrasena;
-	   /*
-	   @OneToMany(mappedBy = "operario", fetch = FetchType.LAZY)
-	   private List<Move> moves;
-
-	   @OneToMany(mappedBy = "operario", fetch = FetchType.LAZY)
-	   private List<PickUpOrder> pickUpOrders;
-	    */
-		
 }

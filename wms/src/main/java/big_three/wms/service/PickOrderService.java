@@ -106,9 +106,7 @@ public class PickOrderService {
                     oldLine.getCantidad(), -oldLine.getCantidad());
         }
 
-        pickOrderLineRepository.findByIdOrdenRetiro(id)
-                .forEach(line -> pickOrderLineRepository.deleteById(
-                        new PickOrderLine.PickOrderLineId(line.getIdOrdenRetiro(), line.getIdProducto())));
+        pickOrderLineRepository.deleteAll(oldLines);
 
         for (PickOrderLineCreateDTO lineaRetiro : dto.getLineasRetiro()) {
             PickOrderLine line = new PickOrderLine();
@@ -136,9 +134,7 @@ public class PickOrderService {
             productService.ajustarStock(line.getIdProducto(),
                     line.getCantidad(), -line.getCantidad());
         }
-        pickOrderLineRepository.findByIdOrdenRetiro(id)
-                .forEach(line -> pickOrderLineRepository.deleteById(
-                        new PickOrderLine.PickOrderLineId(line.getIdOrdenRetiro(), line.getIdProducto())));
+        pickOrderLineRepository.deleteAll(lines);
         pickOrderRepository.deleteById(id);
     }
 

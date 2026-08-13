@@ -21,6 +21,7 @@ DROP TABLE IF EXISTS valoracion_proveedor CASCADE;
 DROP TABLE IF EXISTS proveedor CASCADE;
 DROP TABLE IF EXISTS ubicacion CASCADE;
 DROP TABLE IF EXISTS usuario CASCADE;
+DROP SEQUENCE IF EXISTS codigo_interno_seq;
 -- ============================================================================
 -- CAMBIOS respecto de la versión anterior:
 --   * Todas las PK pasan de UUID a BIGINT GENERATED ALWAYS AS IDENTITY
@@ -83,6 +84,12 @@ CREATE TABLE valoracion_proveedor (
 );
 
 CREATE INDEX idx_valoracion_proveedor ON valoracion_proveedor(id_proveedor);
+
+-- ============================================================================
+-- Secuencia para códigos de barras internos (Producto sin código de barras)
+-- Consultada en runtime via nextval('codigo_interno_seq'); no la valida ddl-auto.
+-- ============================================================================
+CREATE SEQUENCE codigo_interno_seq;
 
 -- ============================================================================
 -- PRODUCTO  (depende de Proveedor — relación "vende", 1:M)

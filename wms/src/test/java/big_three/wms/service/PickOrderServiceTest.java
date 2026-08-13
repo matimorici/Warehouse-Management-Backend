@@ -129,13 +129,12 @@ class PickOrderServiceTest {
 
         List<PickOrderLine> oldLines = List.of(savedLine(10L, 1L, 3));
         List<PickOrderLine> newLines = List.of(savedLine(10L, 2L, 4));
-        when(pickOrderLineRepository.findByIdOrdenRetiro(10L)).thenReturn(oldLines, oldLines, newLines);
+        when(pickOrderLineRepository.findByIdOrdenRetiro(10L)).thenReturn(oldLines, newLines);
 
         PickOrderResponseDTO response = pickOrderService.update(10L, orderDto(1L, line(2L, 4)));
 
         verify(productService).ajustarStock(1L, 3, -3);
-        verify(pickOrderLineRepository).deleteById(argThat(id ->
-                id.getIdOrdenRetiro() == 10L && id.getIdProducto() == 1L));
+        verify(pickOrderLineRepository).deleteAll(oldLines);
         verify(productService).ajustarStock(2L, -4, 4);
         assertEquals(1, response.getLineasRetiro().size());
         assertEquals(2L, response.getLineasRetiro().get(0).getIdProducto());
@@ -153,13 +152,13 @@ class PickOrderServiceTest {
     void deleteById_revertsStockAndDeletesLinesAndOrder() {
         when(pickOrderRepository.existsById(10L)).thenReturn(true);
         List<PickOrderLine> lines = List.of(savedLine(10L, 1L, 3), savedLine(10L, 2L, 5));
-        when(pickOrderLineRepository.findByIdOrdenRetiro(10L)).thenReturn(lines, lines);
+        when(pickOrderLineRepository.findByIdOrdenRetiro(10L)).thenReturn(lines);
 
         pickOrderService.deleteById(10L);
 
         verify(productService).ajustarStock(1L, 3, -3);
         verify(productService).ajustarStock(2L, 5, -5);
-        verify(pickOrderLineRepository, times(2)).deleteById(any());
+        verify(pickOrderLineRepository).deleteAll(lines);
         verify(pickOrderRepository).deleteById(10L);
     }
 

@@ -25,7 +25,6 @@ public class ProductController {
 
     @PostMapping
     public ResponseEntity<ProductResponseDTO> create(@Valid @RequestBody ProductCreateDTO dto) {
-        // El service ahora devuelve directamente el DTO limpio sin password
         ProductResponseDTO response = productService.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

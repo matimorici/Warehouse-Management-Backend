@@ -76,6 +76,30 @@ class ProductControllerTest {
     }
 
     @Test
+    void create_duplicateBarcode_returns400WithError() throws Exception {
+        when(productService.create(any()))
+                .thenThrow(new IllegalArgumentException("Ya existe un producto con ese código de barras: 779123"));
+
+        mockMvc.perform(post("/api/productos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Ya existe un producto con ese código de barras: 779123"));
+    }
+
+    @Test
+    void create_productNotFound_returns500WithError() throws Exception {
+        when(productService.create(any()))
+                .thenThrow(new RuntimeException("Proveedor no encontrado"));
+
+        mockMvc.perform(post("/api/productos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("Proveedor no encontrado"));
+    }
+
+    @Test
     void list_returns200() throws Exception {
         when(productService.findAll()).thenReturn(List.of(response()));
 

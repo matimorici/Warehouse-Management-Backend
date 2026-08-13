@@ -9,6 +9,4 @@ import java.util.List;
 public interface PickOrderLineRepository extends JpaRepository<PickOrderLine, PickOrderLineId> {
 
     List<PickOrderLine> findByIdOrdenRetiro(Long idOrdenRetiro);
-
-    List<PickOrderLine> findByIdProducto(Long idProducto);
 }
