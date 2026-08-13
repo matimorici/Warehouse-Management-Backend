@@ -1,27 +1,18 @@
 -- ============================================================================
--- Warehouse Management System (WMS) — Script de creación de base de datos
--- PostgreSQL
+-- Warehouse Management System (WMS) — Migración V1: creación del schema
+-- Flyway — PostgreSQL
 -- Integrantes: Rufine Tadeo, Morici Matías, Dominguez Dolores
 -- ============================================================================
--- Ejecutar contra una base ya creada, por ejemplo:
---   CREATE DATABASE wms_db;
---   \c wms_db
---   \i wms_schema.sql
--- ============================================================================
--- LIMPIEZA DE TABLAS (Para poder re-ejecutar el script sin errores)
--- ============================================================================
-DROP TABLE IF EXISTS linea_retiro CASCADE;
-DROP TABLE IF EXISTS orden_retiro CASCADE;
-DROP TABLE IF EXISTS linea_compra CASCADE;
-DROP TABLE IF EXISTS orden_compra CASCADE;
-DROP TABLE IF EXISTS movimiento_fisico CASCADE;
-DROP TABLE IF EXISTS stock CASCADE;
-DROP TABLE IF EXISTS producto CASCADE;
-DROP TABLE IF EXISTS valoracion_proveedor CASCADE;
-DROP TABLE IF EXISTS proveedor CASCADE;
-DROP TABLE IF EXISTS ubicacion CASCADE;
-DROP TABLE IF EXISTS usuario CASCADE;
-DROP SEQUENCE IF EXISTS codigo_interno_seq;
+-- Esta migración es la versión original de wms_schema.sql (ver la referencia
+-- en db/wms_schema.sql), con el bloque de DROP/CLEANUP eliminado: Flyway
+-- aplica cada migración UNA sola vez contra una base vacía o baselineada, así
+-- que el DROP TABLE ... CASCADE de limpieza ya no es necesario (y sería
+-- peligroso: borraría datos de bases existentes).
+--
+-- Flyway ejecuta este script automáticamente al arrancar la aplicación,
+-- ANTES de que Hibernate valide el schema (ddl-auto=validate). La secuencia
+-- y las tablas que no tienen entidad JPA (ubicacion, orden_compra, etc.)
+-- también se crean aquí, como en el script original.
 -- ============================================================================
 -- CAMBIOS respecto de la versión anterior:
 --   * Todas las PK pasan de UUID a BIGINT GENERATED ALWAYS AS IDENTITY
@@ -53,6 +44,10 @@ COMMENT ON TABLE usuario IS 'Tabla única para Usuario; el rol distingue Operari
 
 -- ============================================================================
 -- UBICACION
+-- NOTA: las tablas de abajo (ubicacion, valoracion_proveedor, orden_compra,
+-- linea_compra, movimiento_fisico) NO tienen entidad JPA todavía. Forman parte
+-- del diseño completo del dominio y se crean ya para tener el schema completo;
+-- quedan reservadas para features planificadas. No borrarlas.
 -- ============================================================================
 CREATE TABLE ubicacion (
     id_ubicacion     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -180,5 +175,5 @@ CREATE INDEX idx_movimiento_fecha    ON movimiento_fisico(fecha_hora);
 CREATE INDEX idx_movimiento_usuario  ON movimiento_fisico(id_usuario);
 
 -- ============================================================================
--- Fin del script
+-- Fin de la migración V1
 -- ============================================================================

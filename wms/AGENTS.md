@@ -18,7 +18,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 ## Configuration
 
 - **Package**: `big_three.wms`, entrypoint `WmsApplication.java` (port 8080).
-- **DB**: PostgreSQL `wms_db` on `localhost:5432`, user `postgres`, password `12345` (hardcoded in `application.properties`). `ddl-auto=validate` — schema must exist externally; the source of truth is `src/main/resources/sql/wms_schema.sql` (create DB, `\i` the script). `show-sql=true`, `open-in-view=false`.
+- **DB**: PostgreSQL `wms_db` on `localhost:5432`, user `postgres`, password `12345` (hardcoded in `application.properties`). **Schema is owned by Flyway** (`org.flywaydb:flyway-core` + `flyway-database-postgresql`): migrations live in `src/main/resources/db/migration/` and run automatically at startup, before Hibernate. Current chain: `V1__create_schema.sql` (full schema incl. `codigo_interno_seq` and tables with no JPA entity yet — reserved for planned features), `V2__ensure_codigo_interno_seq.sql` (repair for old baselined DBs missing the sequence — no-op on fresh DBs), `V3__seed_admin_user.sql` (default admin: CUIL `20-00000000-1`, password `Admin1234`, rol `ADMINISTRADOR`). `spring.flyway.baseline-on-migrate=true` — existing dev DBs (created with the old `wms_schema.sql`) are baseline-marked as V1 on first boot, no data loss; fresh DBs build from scratch. The old script survives read-only at `src/main/resources/db/wms_schema.sql` as historical reference only. `ddl-auto=validate` only verifies entities match the migrated schema. `show-sql=true`, `open-in-view=false`.
 - **No test profile / H2 override** — `@SpringBootTest` hits real PostgreSQL. `h2`/`mysql-connector-j` were removed from `pom.xml` (PostgreSQL only); only `postgresql` runtime driver remains.
 - **Frontend CORS**: `http://localhost:4200` (Angular), set per-controller via `@CrossOrigin`.
 - **Libraries**: ZXing 3.5.3 (barcode generation) declared but not used anywhere yet — kept intentionally for a planned feature. Lombok excluded from final artifact by `spring-boot-maven-plugin`.
@@ -67,9 +67,9 @@ wms/src/main/java/big_three/wms/
 
 ## Business logic (important)
 
-- **Product create** (`ProductService.create`): if `codigoBarras` is provided and unique → `origen = FABRICANTE`; if blank/null → generates `INT-XXXXXX` via `nextval('codigo_interno_seq')` and `origen = INTERNO`. Also creates a `Stock` row (defaults to 0). Duplicate barcode → `IllegalArgumentException`. The sequence is created by `wms_schema.sql` (`codigo_interno_seq`).
+- **Product create** (`ProductService.create`): if `codigoBarras` is provided and unique → `origen = FABRICANTE`; if blank/null → generates `INT-XXXXXX` via `nextval('codigo_interno_seq')` and `origen = INTERNO`. Also creates a `Stock` row (defaults to 0). Duplicate barcode → `IllegalArgumentException`. The sequence is created by migration `V1__create_schema.sql` (`codigo_interno_seq`).
 - **Product update** (`update`): also upserts the `Stock` row (creates with 0s if missing). Existing product + no new barcode keeps its barcode/origen.
-- **Product delete** (`deleteById`): deletes the `Stock` row first (if present), then the `Product` — no orphans.
+- **Product delete** (`deleteById`): deletes the `Stock` row first (if present), then the `Product` — no orphans. Note: the `stock` FK already has `ON DELETE CASCADE` at the DB level, so the manual delete is defensive belt-and-suspenders, not the sole guard — keep it.
 - **PickOrder create** (`PickOrderService.create`): validates `idUsuario` and every `idProducto` exist, saves order + lines, then calls `productService.ajustarStock(idProducto, -cantidad, +cantidad)` → `disponible -= cantidad`, `pendiente += cantidad`; throws if `disponible` would go negative.
 - **PickOrder update** (`update`): reverses old lines' stock, deletes old lines, saves new lines, applies new stock deltas. Known stale-data risk (see Known issues).
 - **PickOrder delete** (`deleteById`): reverts stock (`+cantidad` disponible, `-cantidad` pendiente), deletes lines, deletes order.
@@ -155,12 +155,15 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 11. ~~**PickOrderService.update() stale data risk** (`PickOrderService.java`)~~ **FIXED**: `update`/`deleteById` reuse the already-fetched line list (`deleteAll(lines)`) instead of re-querying after the stock reversal.
 12. **Test hits real DB**: `@SpringBootTest` connects to PostgreSQL — no H2/test override.
 13. ~~**Login endpoint requires auth**~~ **FIXED**: `SecurityConfig` `permitAll("/api/usuarios")` didn't cover `/api/usuarios/login`, so login fell into `anyRequest().authenticated()`. The duplicate `/api/usuarios/login` endpoint was removed entirely; login lives at the permitted `POST /api/auth/login`.
-14. ~~**`codigo_interno_seq` missing from schema**~~ **FIXED**: `wms_schema.sql` now creates the sequence (see TODO item 2 for applying to existing DBs).
+14. ~~**`codigo_interno_seq` missing from schema**~~ **FIXED**: `V1__create_schema.sql` now creates the sequence (migration-superseded; no manual DB steps needed anymore).
 
 ## Work rules
 
 - Stick to the exact task asked. Do not fix other bugs, refactor, or touch unrelated files unless explicitly told to.
 - If a task uncovers related issues, ask before fixing them.
+- **Schema changes go through Flyway migrations.** Never hand-run SQL against a shared/dev DB, never edit an already-applied migration (they are immutable — checksums in `flyway_schema_history` will fail the boot), and never rely on `ddl-auto=create/update`. New structural change → add `db/migration/V<n+1>__<desc>.sql`; it applies automatically on next boot. Keep the chain sorted; don't renumber existing versions.
+- Seed/reference data (e.g. users) also goes in migrations so it exists identically on every DB.
+- **V2 baseline-repair verification is pending a teammate to actually run** against a genuinely old pre-sequence DB — `bash scripts/verify-v2-repair.sh` (needs local PostgreSQL; creates/disposes a scratch DB `wms_db_v2_test`, never touches `wms_db`). Don't mark the V2 gap "fully closed" until someone has run it and seen `PASÓ`.
 
 ## Code style
 
