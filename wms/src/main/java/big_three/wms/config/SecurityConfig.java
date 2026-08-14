@@ -19,7 +19,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable()) //desabilita protecciones, quitar el disable para implementar Sessions o Cookies
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**").permitAll() //lista de endpoints permitidos, modificar
+                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/valoraciones-proveedor/**", "/api/ubicaciones/**", "/api/ordenes-compra/**", "/api/movimientos-fisicos/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
                         .anyRequest().authenticated() // pide auth para todos los endpoints que no estén arriba
                 );
         return http.build();

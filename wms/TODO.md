@@ -1,5 +1,40 @@
 # TODO — Backlog for agents
 
+## Funcionalidades planificadas pero NO implementadas aún
+
+El schema (`V1__create_schema.sql`) creaba tablas para features del dominio que no tenían código Java (sin entidad JPA, repository, service ni controller) y quedaron reservadas para features planificadas — no borrarlas. **Todas están implementadas (ver `[X]` abajo);** la única pendiente es la seguridad, que está delegada.
+
+1. [X] **Valoración de proveedores**: la tabla `valoracion_proveedor` ya existía en el schema (`id_proveedor`, `fecha_hora`, `tiempo_entrega`, `forma_entrega`, `relacion_precio_calidad`), pero NO tenía entidad JPA, repository, service ni endpoints. A pesar de que la tabla existía, la feature no estaba implementada.
+   - **What I did:** implementada completa — entidad `ValoracionProveedor` (con `@ManyToOne` a `Proveedor`), DTOs create/response, repository (`findByIdProveedor`), service CRUD + `findByProveedor`, controller `POST/GET/GET/{id}/GET /proveedor/{idProveedor}/PUT/DELETE` bajo `/api/valoraciones-proveedor`. `fecha_hora` se setea server-side (`LocalDateTime.now()`) al crear, igual que `Stock`. Tests: `ValoracionProveedorServiceTest` + `ValoracionProveedorControllerTest`.
+2. [X] **Ubicaciones**: la tabla `ubicacion` (`id_ubicacion`, `nombre_ubicacion`) ya existía en el schema sin código Java.
+   - **What I did:** implementada completa — entidad `Ubicacion`, DTOs create/response, repository, service CRUD, controller `/api/ubicaciones`. Tests: `UbicacionServiceTest` + `UbicacionControllerTest`.
+3. [X] **Órdenes de compra**: las tablas `orden_compra` + `linea_compra` (estado `PENDIENTE`/`RECIBIDA`/`CANCELADA`) existían en el schema sin entidades JPA, repository, service ni endpoints.
+   - **What I did:** implementada completa — entidades `OrdenCompra` (estado enum `EstadoOrdenCompra`, `idProveedor` como Long crudo con la misma decisión documentada que `PickOrder.idUsuario`) y `LineaCompra` (PK compuesta con `@IdClass` interno), DTOs create/response, repos (`LineaCompraRepository.findByIdOrdenCompra`), service, controller `/api/ordenes-compra`. Comportamiento: `create` deja `PENDIENTE` sin tocar stock; `update?estado=RECIBIDA` suma `+cantidad` a `cantidadDisponible` por línea vía `ProductService.ajustarStock`; `PENDIENTE`→`CANCELADA` sin stock; órdenes `RECIBIDA` no se pueden editar ni eliminar. Tests: `OrdenCompraServiceTest` + `OrdenCompraControllerTest`.
+4. [X] **Movimientos físicos (historial de eventos)**: la tabla `movimiento_fisico` (producto ↔ ubicación desde/hasta ↔ usuario; PK compuesta producto + fecha_hora) existía en el schema sin entidad JPA, repository, service ni endpoints.
+   - **What I did:** implementado como log append-only — entidad `MovimientoFisico` (PK compuesta `@IdClass` interno), DTOs create/response, repo (`findByIdProducto`), service (`create` valida producto/ubicaciones/usuario y setea `fecha_hora` server-side; `findAll`, `findByProducto`, `findByIdProductoAndFechaHora`; sin update/delete por ser historial), controller `/api/movimientos-fisicos`. Tests: `MovimientoFisicoServiceTest` + `MovimientoFisicoControllerTest`.
+5. [X] **Generación de códigos de barras (ZXing)**: las dependencias `com.google.zxing:core` y `javase` (3.5.3) estaban en `pom.xml` sin ningún código que las use; solo existía el código interno textual `INT-XXXXXX`.
+   - **What I did:** implementada — `service/BarcodeService` genera el PNG del código de barras (`MultiFormatWriter` + `CODE_128` → `MatrixToImageWriter` → `ImageIO`), y `GET /api/productos/{id}/barcode` responde `image/png` con el barcode del `codigoBarras` del producto. Tests: `BarcodeServiceTest` (firma PNG + round-trip de decodificación con `MultiFormatReader`) + casos `getBarcode_returnsPng`/`getBarcode_productNotFound_returns500` en `ProductControllerTest`.
+6. **Seguridad/autenticación real** — **DELEGADA** (a cargo de otro integrante; no implementar acá). Ver la sección `## Seguridad/autenticación — DELEGADA` más abajo.
+
+## Seguridad/autenticación — DELEGADA (a cargo de otro integrante)
+
+Punto 6 de la lista de arriba. Delegada a otro integrante del grupo — **no implementarla aquí**. Plan acordado: **SESSIONS (HttpSession), NO JWT**.
+
+### Plan a seguir
+
+1. **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
+2. **`DaoAuthenticationProvider`**: configurar con el bean `BCryptPasswordEncoder` ya existente en `SecurityConfig`.
+3. **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` (`HttpSessionSecurityContextRepository` / `SecurityContextRepository`). Tras el login, el contexto queda poblado y la sesión lo guarda; el frontend manda la cookie de sesión (`JSESSIONID`).
+4. **Logout**: endpoint `POST /api/auth/logout` que invalide la sesión (`SecurityContextLogoutHandler`, `invalidateHttpSession = true`).
+5. **CSRF**: **re-habilitar** (hoy está `csrf.disable()`). Usar `CookieCsrfTokenRepository.withHttpOnlyFalse()` para que Angular (localhost:4200) lea la cookie `XSRF-TOKEN` y la envíe en el header `X-XSRF-TOKEN`.
+6. **Protección de sesión**: `sessionFixation().changeSessionId()` (default de Spring) y timeout de sesión (`server.servlet.session.timeout`).
+7. **Autorización por rol**: restringir endpoints sensibles (`GET/DELETE /api/usuarios/{id}`, etc.) con `hasRole('ADMINISTRADOR')`; CRUD operativo con `hasAnyRole('OPERARIO', 'ADMINISTRADOR')`. Revisar la lista `permitAll` actual de `SecurityConfig` (incluye los nuevos `/api/valoraciones-proveedor/**` y `/api/ubicaciones/**`, que se pusieron como placeholder mientras no hay sesión).
+8. **Frontend**: Angular con `withCredentials: true` (enviar cookie de sesión) y token CSRF en cada request.
+
+### Estado actual
+
+Hoy no hay `UserDetailsService`, ni sesión ni token: `POST /api/auth/login` valida CUIL+contraseña y devuelve el DTO sin crear sesión; los endpoints `authenticated()` son inalcanzables.
+
 Actionable items noticed while working on this codebase. Keep this up to date as items are fixed. The full "Known issues" reference list lives in `AGENTS.md`; this file tracks the work to do about them, in priority order.
 
 ## High priority
