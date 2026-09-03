@@ -59,7 +59,7 @@ public class ValoracionProveedorService {
         if (!proveedorRepository.existsById(idProveedor)) {
             throw new RuntimeException("Proveedor no encontrado");
         }
-        return valoracionProveedorRepository.findByIdProveedor(idProveedor)
+        return valoracionProveedorRepository.findByProveedorIdProveedor(idProveedor)
                 .stream()
                 .map(this::convertToResponseDTO)
                 .collect(Collectors.toList());

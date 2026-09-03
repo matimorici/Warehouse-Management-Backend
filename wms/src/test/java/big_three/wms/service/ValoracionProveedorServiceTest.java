@@ -125,7 +125,7 @@ class ValoracionProveedorServiceTest {
     @Test
     void findByProveedor_success_returnsDtos() {
         when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(valoracionProveedorRepository.findByIdProveedor(1L)).thenReturn(List.of(valoracion(1L)));
+        when(valoracionProveedorRepository.findByProveedorIdProveedor(1L)).thenReturn(List.of(valoracion(1L)));
 
         List<ValoracionProveedorResponseDTO> response = valoracionProveedorService.findByProveedor(1L);
 
@@ -143,7 +143,7 @@ class ValoracionProveedorServiceTest {
     @Test
     void findByProveedor_noValoraciones_returnsEmptyList() {
         when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(valoracionProveedorRepository.findByIdProveedor(1L)).thenReturn(List.of());
+        when(valoracionProveedorRepository.findByProveedorIdProveedor(1L)).thenReturn(List.of());
 
         List<ValoracionProveedorResponseDTO> response = valoracionProveedorService.findByProveedor(1L);
 
