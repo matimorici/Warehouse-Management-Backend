@@ -2,6 +2,33 @@
 
 Actionable items noticed while working on this codebase. Keep this up to date as items are fixed. The full "Known issues" reference list lives in `AGENTS.md`; this file tracks the work to do about them, in priority order.
 
+## Seguridad/autenticación — DELEGADA (a cargo de otro integrante)
+
+Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordado: **SESSIONS (HttpSession), NO JWT**.
+
+0. [ ] **Preparación del terreno**
+    - [ ] Convertir `User.rol` de `String` a `enum Role { OPERARIO, ADMINISTRADOR }` con `@Enumerated(EnumType.STRING)`. No requiere migración de Flyway nueva: la columna sigue guardando el mismo texto (`"OPERARIO"`/`"ADMINISTRADOR"`), solo cambia cómo lo lee el código Java.
+    - [ ] Clasificar todos los endpoints por rol (ver tabla más abajo). Una fila queda pendiente de confirmar con el equipo antes de codificar: `/api/proveedores/**`.
+    - [ ] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
+
+1. [ ] **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
+2. [ ] **`DaoAuthenticationProvider`**: configurar con el bean `BCryptPasswordEncoder` ya existente en `SecurityConfig`, más el `UserDetailsService` del punto anterior. Exponer el bean `AuthenticationManager` (`AuthenticationConfiguration.getAuthenticationManager()`).
+3. [ ] **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` vía `HttpSessionSecurityContextRepository`. Tras el login, el frontend recibe la cookie de sesión (`JSESSIONID`).
+    - [ ] Protección contra session fixation: `sessionFixation().changeSessionId()` (default de Spring, dejarlo explícito en la config).
+    - [ ] Definir y configurar timeout de sesión (`server.servlet.session.timeout`).
+4. [ ] **Logout**: endpoint `POST /api/auth/logout` que invalide la sesión (`SecurityContextLogoutHandler`, `invalidateHttpSession = true`).
+5. [ ] **CSRF**: re-habilitar (hoy está `csrf.disable()`). Usar `CookieCsrfTokenRepository.withHttpOnlyFalse()` para que Angular (localhost:4200) lea la cookie `XSRF-TOKEN` y la envíe en el header `X-XSRF-TOKEN`.
+6. [ ] **Autorización por rol**: reemplazar el `permitAll()` masivo actual de `SecurityConfig` por reglas `hasRole('ADMINISTRADOR')` / `hasAnyRole('OPERARIO','ADMINISTRADOR')` según la tabla de rutas de la Fase 0. Cerrar con `anyRequest().authenticated()` al final, para que cualquier endpoint nuevo que se agregue después quede protegido por default.
+7. [ ] **Endurecimiento adicional** (independientes entre sí, se pueden hacer en cualquier orden o en paralelo con el punto 8):
+    - [ ] Rate limiting / bloqueo tras intentos fallidos de login (prioridad alta de este grupo — es el único que tapa un agujero real, no solo prolijidad).
+    - [ ] Revisar headers de seguridad HTTP que Spring Security ya deja activos por default.
+    - [ ] Cookie `Secure` en `JSESSIONID` — **NO activar directo en `application.properties`**, va controlado por `Spring Profiles` (`application-dev.properties` = `false`, `application-prod.properties` = `true`), porque en `http://localhost` rompe el login si se activa a mano.
+    - [ ] Centralizar CORS (sacar `@CrossOrigin(origins = "http://localhost:4200")` hardcodeado de cada controller, mover a config global leyendo el origen desde `application.properties`/env var).
+    - [ ] Logging de eventos de seguridad (login OK/fallido, logout, accesos rechazados).
+8. [ ] **Testing de seguridad end-to-end**: `@SpringBootTest` + `MockMvc` (con `spring-security-test`, ya en `pom.xml`) cubriendo login válido/inválido/CUIL inexistente, logout, CSRF (sin token / token no coincide / token OK), y matriz de autorización por rol (un caso por categoría de la tabla, más 401 sin login vs. 403 con login pero sin permiso).
+    - [ ] Base de datos de test: **decisión — Testcontainers** (Postgres real en contenedor Docker, se destruye al terminar), no H2 (motor distinto a producción, riesgo de tests que pasan en H2 pero no reflejan el comportamiento real) ni Postgres local compartido (ensucia datos de desarrollo, no reproducible para el resto del equipo). Mismo ítem que el punto 8 de "High priority" más abajo en este archivo — si se resuelve ahí primero, reusar esa infraestructura acá.
+9. [ ] **Frontend** (cuando el equipo arranque esa etapa, no bloquea nada del backend): Angular con `withCredentials: true` (para que el navegador adjunte `JSESSIONID` y `XSRF-TOKEN` entre `localhost:4200` y `localhost:8080`) y `HttpClientXsrfModule` leyendo la cookie `XSRF-TOKEN` para mandarla en el header `X-XSRF-TOKEN` en cada request que modifique datos.
+
 ## High priority
 
 1. [X] **`POST /api/usuarios/login` is unreachable** (AGENTS.md bug #13). `SecurityConfig` permits `/api/usuarios` (exact path) but not `/api/usuarios/login`, so login falls into `anyRequest().authenticated()` → 403. There is no auth mechanism, so the endpoint can never succeed. Fix: add `/api/usuarios/login` to the matcher or switch to `/api/usuarios/**`.
