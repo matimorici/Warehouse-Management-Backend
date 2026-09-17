@@ -25,9 +25,10 @@ public class User {
 	   
 	    @Column(nullable = false, length = 20)
 	    private String cuil;
-	   
-	    @Column(nullable = false)
-	    private String rol = "OPERARIO";
+
+		@Column(nullable = false)
+	    @Enumerated(EnumType.STRING)
+	    private Role rol = Role.OPERARIO;
 
 	    @Column(nullable = false, length = 255)
 		private String contrasena;
