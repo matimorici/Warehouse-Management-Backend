@@ -3,6 +3,7 @@ package big_three.wms.controller;
 import big_three.wms.config.SecurityConfig;
 import big_three.wms.dto.UserResponseDTO;
 import big_three.wms.exception.InvalidCredentialsException;
+import big_three.wms.model.Role;
 import big_three.wms.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +34,7 @@ class AuthControllerTest {
 
     @Test
     void login_validCredentials_returns200() throws Exception {
-        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", "OPERARIO"));
+        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

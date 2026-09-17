@@ -2,6 +2,7 @@ package big_three.wms.controller;
 
 import big_three.wms.config.SecurityConfig;
 import big_three.wms.dto.UserResponseDTO;
+import big_three.wms.model.Role;
 import big_three.wms.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +35,7 @@ class UserControllerTest {
 
     @Test
     void create_validUser_returns201() throws Exception {
-        when(userService.create(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", "OPERARIO"));
+        when(userService.create(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/usuarios")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -67,7 +68,7 @@ class UserControllerTest {
 
     @Test
     void list_returns200() throws Exception {
-        when(userService.findAll()).thenReturn(List.of(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", "OPERARIO")));
+        when(userService.findAll()).thenReturn(List.of(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO)));
 
         mockMvc.perform(get("/api/usuarios"))
                 .andExpect(status().isOk())

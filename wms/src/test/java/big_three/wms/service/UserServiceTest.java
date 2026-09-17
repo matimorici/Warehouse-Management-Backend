@@ -4,6 +4,7 @@ import big_three.wms.dto.LoginRequestDTO;
 import big_three.wms.dto.UserCreateDTO;
 import big_three.wms.dto.UserResponseDTO;
 import big_three.wms.exception.InvalidCredentialsException;
+import big_three.wms.model.Role;
 import big_three.wms.model.User;
 import big_three.wms.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,7 @@ class UserServiceTest {
         user.setNombre("Juan");
         user.setApellido("Perez");
         user.setCuil(cuil);
-        user.setRol("OPERARIO");
+        user.setRol(Role.OPERARIO);
         user.setContrasena(hash);
         return user;
     }
@@ -67,7 +68,7 @@ class UserServiceTest {
         assertNotNull(response);
         assertEquals(1L, response.getIdUsuario());
         assertEquals("Juan", response.getNombre());
-        assertEquals("OPERARIO", response.getRol());
+        assertEquals(Role.OPERARIO, response.getRol());
         verify(userRepository).save(argThat(u -> "hashed-bcrypt".equals(u.getContrasena())));
         verify(passwordEncoder, never()).matches(any(), any());
     }
