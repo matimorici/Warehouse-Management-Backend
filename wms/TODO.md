@@ -7,8 +7,8 @@ Actionable items noticed while working on this codebase. Keep this up to date as
 Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordado: **SESSIONS (HttpSession), NO JWT**.
 
 0. [ ] **Preparación del terreno**
-    - [ ] Convertir `User.rol` de `String` a `enum Role { OPERARIO, ADMINISTRADOR }` con `@Enumerated(EnumType.STRING)`. No requiere migración de Flyway nueva: la columna sigue guardando el mismo texto (`"OPERARIO"`/`"ADMINISTRADOR"`), solo cambia cómo lo lee el código Java.
-    - [ ] Clasificar todos los endpoints por rol (ver tabla más abajo). Una fila queda pendiente de confirmar con el equipo antes de codificar: `/api/proveedores/**`.
+    - [X] Convertir `User.rol` de `String` a `enum Role { OPERARIO, ADMINISTRADOR }` con `@Enumerated(EnumType.STRING)`. No requiere migración de Flyway nueva: la columna sigue guardando el mismo texto (`"OPERARIO"`/`"ADMINISTRADOR"`), solo cambia cómo lo lee el código Java.
+    - [X] Clasificar todos los endpoints por rol (ver tabla más abajo).
     - [ ] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
 
 1. [ ] **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
