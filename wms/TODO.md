@@ -6,11 +6,10 @@ Actionable items noticed while working on this codebase. Keep this up to date as
 
 Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordado: **SESSIONS (HttpSession), NO JWT**.
 
-0. [ ] **Preparación del terreno**
+0. [X] **Preparación del terreno**
     - [X] Convertir `User.rol` de `String` a `enum Role { OPERARIO, ADMINISTRADOR }` con `@Enumerated(EnumType.STRING)`. No requiere migración de Flyway nueva: la columna sigue guardando el mismo texto (`"OPERARIO"`/`"ADMINISTRADOR"`), solo cambia cómo lo lee el código Java.
     - [X] Clasificar todos los endpoints por rol (ver tabla más abajo).
-    - [ ] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
-
+    - [X] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
 1. [ ] **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
 2. [ ] **`DaoAuthenticationProvider`**: configurar con el bean `BCryptPasswordEncoder` ya existente en `SecurityConfig`, más el `UserDetailsService` del punto anterior. Exponer el bean `AuthenticationManager` (`AuthenticationConfiguration.getAuthenticationManager()`).
 3. [ ] **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` vía `HttpSessionSecurityContextRepository`. Tras el login, el frontend recibe la cookie de sesión (`JSESSIONID`).
