@@ -45,3 +45,6 @@ build/
 
 ### Logs ###
 *.log
+
+### BD ###
+application-local.properties
