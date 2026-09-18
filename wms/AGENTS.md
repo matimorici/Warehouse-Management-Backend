@@ -29,7 +29,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 `SecurityConfig.java` defines a `BCryptPasswordEncoder` bean and a filter chain with CSRF disabled. Current `permitAll()` list (single-path matchers, **exact paths only — no trailing `/**`**):
 
 - `POST /api/usuarios` and `GET /api/usuarios` → `permitAll`
-- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**` → `permitAll`
+- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**` → `permitAll`
 - Everything else → `anyRequest().authenticated()`, including:
   - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
 
@@ -41,15 +41,15 @@ There is no `UserDetailsService`, JWT, session management, or token mechanism. T
 wms/src/main/java/big_three/wms/
 ├── WmsApplication.java        # entrypoint
 ├── config/SecurityConfig.java # PasswordEncoder + SecurityFilterChain
-├── controller/                # AuthController, PickOrderController, ProductController, ProveedorController, UserController
-├── dto/                       # 14 DTOs, one per request/response (see API section)
+├── controller/                # AuthController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, UserController
+├── dto/                       # 17 DTOs, one per request/response (see API section)
 ├── exception/InvalidCredentialsException.java
-├── model/                     # User, Product, Proveedor, Stock, PickOrder, PickOrderLine
-├── repository/                # 6 Spring Data JPA repositories
-└── service/                   # UserService, ProductService, ProveedorService, PickOrderService
+├── model/                     # User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine
+├── repository/                # 8 Spring Data JPA repositories
+└── service/                   # UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService
 ```
 
-## Entities (6)
+## Entities (8)
 
 | Entity | Table | PK | Key relationships |
 |--------|-------|----|-------------------|
@@ -59,11 +59,14 @@ wms/src/main/java/big_three/wms/
 | `Stock` | `stock` | `id_producto` (Long, no auto-gen) | 1:1 with `Product` (same PK, FK `ON DELETE CASCADE` in schema) |
 | `PickOrder` | `orden_retiro` | `id_orden_retiro` (Long, IDENTITY) | `idUsuario` stored as raw `Long` (no `@ManyToOne`, no JPA FK) — **intentional**, see Known issues #4 |
 | `PickOrderLine` | `linea_retiro` | `@IdClass(PickOrderLineId)`: `id_orden_retiro` + `id_producto` | Composite PK |
+| `PurchaseOrder` | `orden_compra` | `id_orden_compra` (Long, IDENTITY) | `idSupplier` stored as raw `Long` (no JPA FK, DB FK only) — same pattern as `PickOrder.idUsuario` |
+| `PurchaseOrderLine` | `linea_compra` | `@IdClass(PurchaseOrderLineId)`: `id_orden_compra` + `id_producto` | Composite PK |
 
 - `Product` has inner enum `OrigenCodigoBarras { FABRICANTE, INTERNO }` (mapped `@Enumerated(EnumType.STRING)`).
 - `User` fields: `nombre`, `apellido`, `cuil`, `rol` (default `"OPERARIO"`), `contrasena` (BCrypt hash).
 - `Stock`: `cantidadDisponible`, `cantidadPendiente`, `fechaHora`.
 - `PickOrderLine`: `cantidad` (Integer).
+- `PurchaseOrder`: inner enum `Status { PENDIENTE, RECIBIDA, CANCELADA }` (mapped `@Enumerated(EnumType.STRING)`).
 
 ## Business logic (important)
 
@@ -73,7 +76,11 @@ wms/src/main/java/big_three/wms/
 - **PickOrder create** (`PickOrderService.create`): validates `idUsuario` and every `idProducto` exist, saves order + lines, then calls `productService.ajustarStock(idProducto, -cantidad, +cantidad)` → `disponible -= cantidad`, `pendiente += cantidad`; throws if `disponible` would go negative.
 - **PickOrder update** (`update`): reverses old lines' stock, deletes old lines, saves new lines, applies new stock deltas. Known stale-data risk (see Known issues).
 - **PickOrder delete** (`deleteById`): reverts stock (`+cantidad` disponible, `-cantidad` pendiente), deletes lines, deletes order.
-- **GET /api/ordenes-retiro** returns summaries with `lineasRetiro: null`; only `GET /api/ordenes-retiro/{id}` includes the lines.
+- **PurchaseOrder create** (`PurchaseOrderService.create`): validates `idSupplier` and every `idProduct` exist, saves order with `fechaHora`=now and `estado`=`PENDIENTE`, saves lines. No stock adjustment on create.
+- **PurchaseOrder receive** (`receive`): only from `PENDIENTE`; calls `ajustarStock(idProduct, +cantidad, 0)` (`disponible += cantidad`) for every line and marks the order `RECIBIDA`. Throws `IllegalArgumentException` if already `RECIBIDA`, `RuntimeException` if `CANCELADA`.
+- **PurchaseOrder update** (`update`): replaces supplier + lines; if the order was `RECIBIDA`, it first reverses old lines' stock (`-cantidad` disponible), deletes old lines, saves new lines, then re-applies stock for the new lines.
+- **PurchaseOrder delete** (`deleteById`): if `RECIBIDA`, reverts stock (`-cantidad` disponible) before deleting lines + order.
+- **GET /api/ordenes-retiro** returns summaries with `lineasRetiro: null`; only `GET /api/ordenes-retiro/{id}` includes the lines. Same for `GET /api/ordenes-compra` (summaries, `lines: null`) vs `GET /api/ordenes-compra/{id}` (with lines).
 - **Response DTOs never include the password hash.** Login (`UserService.login`) just verifies CUIL+password and returns the user DTO — no token/session.
 
 ## API endpoints
@@ -130,6 +137,19 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 | GET | `/api/ordenes-retiro/{id}` | No | — | `PickOrderResponseDTO` (with lines) |
 | PUT | `/api/ordenes-retiro/{id}` | No | `PickOrderCreateDTO` | `PickOrderResponseDTO` |
 | DELETE | `/api/ordenes-retiro/{id}` | No | — | 204 (reverts stock) |
+
+### Órdenes de compra — `PurchaseOrderController`
+
+| Method | Path | Auth | Body | Returns |
+|--------|------|------|------|---------|
+| POST | `/api/ordenes-compra` | No | `PurchaseOrderCreateDTO`: `idSupplier`, `lines[]`: `{idProduct, amount ≥ 1}` | 201 `PurchaseOrderResponseDTO` (with lines) |
+| GET | `/api/ordenes-compra` | No | — | `List<PurchaseOrderResponseDTO>` (summaries, `lines: null`) |
+| GET | `/api/ordenes-compra/{id}` | No | — | `PurchaseOrderResponseDTO` (with lines) |
+| PUT | `/api/ordenes-compra/{id}` | No | `PurchaseOrderCreateDTO` | `PurchaseOrderResponseDTO` |
+| PUT | `/api/ordenes-compra/{id}/recibir` | No | — | `PurchaseOrderResponseDTO` (adjusts stock: `disponible += cantidad`; order becomes `RECIBIDA`) |
+| DELETE | `/api/ordenes-compra/{id}` | No | — | 204 (reverts stock if `RECIBIDA`) |
+
+`PurchaseOrderResponseDTO`: `idPurchaseOrder`, `dateTime`, `idSupplier`, `status` (`PENDIENTE`/`RECIBIDA`/`CANCELADA`), `lines`. `PurchaseOrderLineResponseDTO`: `idProduct`, `amount`.
 
 ## Error handling
 

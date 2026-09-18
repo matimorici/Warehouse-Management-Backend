@@ -130,11 +130,12 @@ wms/src/main/java/big_three/wms/
 ├── config/
 │   └── SecurityConfig.java          # Configuración de seguridad
 ├── controller/
-│   ├── AuthController.java          # Login (duplicado)
+│   ├── AuthController.java          # Login
 │   ├── PickOrderController.java     # CRUD órdenes de retiro
 │   ├── ProductController.java       # CRUD productos + stock
 │   ├── ProveedorController.java     # CRUD proveedores
-│   └── UserController.java          # CRUD usuarios + login
+│   ├── PurchaseOrderController.java # CRUD órdenes de compra + recibir
+│   └── UserController.java          # CRUD usuarios
 ├── dto/
 │   ├── LoginRequestDTO.java
 │   ├── PickOrderCreateDTO.java
@@ -145,6 +146,10 @@ wms/src/main/java/big_three/wms/
 │   ├── ProductResponseDTO.java
 │   ├── ProveedorCreateDTO.java
 │   ├── ProveedorResponseDTO.java
+│   ├── PurchaseOrderCreateDTO.java
+│   ├── PurchaseOrderLineCreateDTO.java
+│   ├── PurchaseOrderLineResponseDTO.java
+│   ├── PurchaseOrderResponseDTO.java
 │   ├── StockResponseDTO.java
 │   ├── StockUpdateDTO.java
 │   ├── UserCreateDTO.java
@@ -156,6 +161,8 @@ wms/src/main/java/big_three/wms/
 │   ├── PickOrderLine.java           # Línea de orden de retiro (composite PK)
 │   ├── Product.java                 # Producto (enum OrigenCodigoBarras)
 │   ├── Proveedor.java               # Proveedor
+│   ├── PurchaseOrder.java           # Orden de compra (enum Status)
+│   ├── PurchaseOrderLine.java       # Línea de orden de compra (composite PK)
 │   ├── Stock.java                   # Stock (1:1 con Product)
 │   └── User.java                    # Usuario
 ├── repository/
@@ -163,15 +170,16 @@ wms/src/main/java/big_three/wms/
 │   ├── PickOrderRepository.java
 │   ├── ProductRepository.java
 │   ├── ProveedorRepository.java
+│   ├── PurchaseOrderLineRepository.java
+│   ├── PurchaseOrderRepository.java
 │   ├── StockRepository.java
 │   └── UserRepository.java
-├── service/
-│   ├── PickOrderService.java
-│   ├── ProductService.java
-│   ├── ProveedorService.java
-│   └── UserService.java
-└── util/
-    └── Validations.java             # (vacía — placeholder)
+└── service/
+    ├── PickOrderService.java
+    ├── ProductService.java
+    ├── ProveedorService.java
+    ├── PurchaseOrderService.java
+    └── UserService.java
 ```
 
 ## Entidades
@@ -184,6 +192,8 @@ wms/src/main/java/big_three/wms/
 | **Stock** | `stock` | Stock de cada producto. Relación 1:1 con Product (comparten PK). Tiene cantidad disponible y cantidad pendiente. |
 | **PickOrder** | `orden_retiro` | Orden de retiro de productos. Asociada a un usuario por `id_usuario` y compuesta por una o más líneas. |
 | **PickOrderLine** | `linea_retiro` | Línea de una orden de retiro. PK compuesta: `id_orden_retiro` + `id_producto`. Cantidad a retirar. |
+| **PurchaseOrder** | `orden_compra` | Orden de compra a un proveedor. Tiene estado (`PENDIENTE`/`RECIBIDA`/`CANCELADA`), fecha/hora y una o más líneas. |
+| **PurchaseOrderLine** | `linea_compra` | Línea de una orden de compra. PK compuesta: `id_orden_compra` + `id_producto`. Cantidad. |
 
 ## API REST
 
@@ -243,6 +253,19 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 
 > Al crear/actualizar una orden de retiro, el stock se ajusta automáticamente: se resta de `cantidadDisponible` y se suma a `cantidadPendiente`. Al eliminar, se revierte el ajuste.
 
+### Órdenes de Compra
+
+| Método | Ruta | Descripción | Body |
+|--------|------|-------------|------|
+| `POST` | `/api/ordenes-compra` | Crear orden de compra | `{ "idSupplier", "lines": [{ "idProduct", "amount" }] }` |
+| `GET` | `/api/ordenes-compra` | Listar órdenes (resumen, sin líneas) | — |
+| `GET` | `/api/ordenes-compra/{id}` | Buscar orden por ID (con líneas) | — |
+| `PUT` | `/api/ordenes-compra/{id}` | Actualizar orden | `{ "idSupplier", "lines": [{ "idProduct", "amount" }] }` |
+| `PUT` | `/api/ordenes-compra/{id}/recibir` | Marcar orden como recibida (suma al stock disponible) | — |
+| `DELETE` | `/api/ordenes-compra/{id}` | Eliminar orden (revierte stock si ya fue recibida) | — |
+
+> Al **recibir** una orden de compra, cada línea suma su cantidad a `cantidadDisponible` del producto. Si se actualiza una orden ya recibida, se revierte el ajuste de las líneas viejas y se aplica el de las nuevas; al eliminar una recibida, se revierte el stock. El estado inicial es `PENDIENTE`.
+
 ## Validaciones
 
 Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retornan 400 Bad Request con los mensajes en español:
@@ -251,6 +274,7 @@ Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retor
 - **Producto**: nombre (3-150 chars), descripción (3-500 chars), código de barras (máx 50 chars, opcional), proveedor requerido, origen (`FABRICANTE` o `INTERNO`), cantidades ≥ 0
 - **Proveedor**: CUIT (formato XX-XXXXXXXX-X), razón social (3-150 chars), email válido (si se provee)
 - **Orden de retiro**: usuario requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
+- **Orden de compra**: proveedor requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
 
 ## Issues conocidos
 

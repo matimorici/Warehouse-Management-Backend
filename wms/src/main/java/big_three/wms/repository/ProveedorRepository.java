@@ -5,4 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProveedorRepository extends JpaRepository<Proveedor, Long> {
     boolean existsByCuit(String cuit);
+    boolean existsById(Long idProveedor);
 }
