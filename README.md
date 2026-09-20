@@ -131,12 +131,15 @@ wms/src/main/java/big_three/wms/
 │   └── SecurityConfig.java          # Configuración de seguridad
 ├── controller/
 │   ├── AuthController.java          # Login
+│   ├── LocationController.java      # CRUD ubicaciones
 │   ├── PickOrderController.java     # CRUD órdenes de retiro
 │   ├── ProductController.java       # CRUD productos + stock
 │   ├── ProveedorController.java     # CRUD proveedores
 │   ├── PurchaseOrderController.java # CRUD órdenes de compra + recibir
 │   └── UserController.java          # CRUD usuarios
 ├── dto/
+│   ├── LocationCreateDTO.java
+│   ├── LocationResponseDTO.java
 │   ├── LoginRequestDTO.java
 │   ├── PickOrderCreateDTO.java
 │   ├── PickOrderLineCreateDTO.java
@@ -157,6 +160,7 @@ wms/src/main/java/big_three/wms/
 ├── exception/
 │   └── InvalidCredentialsException.java
 ├── model/
+│   ├── Location.java               # Ubicación
 │   ├── PickOrder.java               # Orden de retiro
 │   ├── PickOrderLine.java           # Línea de orden de retiro (composite PK)
 │   ├── Product.java                 # Producto (enum OrigenCodigoBarras)
@@ -166,6 +170,7 @@ wms/src/main/java/big_three/wms/
 │   ├── Stock.java                   # Stock (1:1 con Product)
 │   └── User.java                    # Usuario
 ├── repository/
+│   ├── LocationRepository.java
 │   ├── PickOrderLineRepository.java
 │   ├── PickOrderRepository.java
 │   ├── ProductRepository.java
@@ -175,6 +180,7 @@ wms/src/main/java/big_three/wms/
 │   ├── StockRepository.java
 │   └── UserRepository.java
 └── service/
+    ├── LocationService.java
     ├── PickOrderService.java
     ├── ProductService.java
     ├── ProveedorService.java
@@ -186,6 +192,7 @@ wms/src/main/java/big_three/wms/
 
 | Entidad | Tabla | Descripción |
 |---------|-------|-------------|
+| **Location** | `ubicacion` | Ubicaciones del almacén. Solo tiene nombre (`name` → `nombre_ubicacion`). |
 | **User** | `usuario` | Usuarios del sistema (nombre, apellido, CUIL, rol, contraseña hasheada con BCrypt). Rol por defecto: `OPERARIO`. |
 | **Product** | `producto` | Productos del almacén. Tiene código de barras (interno o de fábrica), descripción y relación con un proveedor. |
 | **Proveedor** | `proveedor` | Proveedores de productos (CUIT, razón social, teléfono, mail, dirección). |
@@ -241,6 +248,16 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 | `PUT` | `/api/proveedores/{id}` | Actualizar proveedor | `{ "cuit", "razonSocial", "telefono"?, "mail"?, "direccion"? }` |
 | `DELETE` | `/api/proveedores/{id}` | Eliminar proveedor | — |
 
+### Ubicaciones
+
+| Método | Ruta | Descripción | Body |
+|--------|------|-------------|------|
+| `POST` | `/api/ubicaciones` | Crear ubicación | `{ "name" }` |
+| `GET` | `/api/ubicaciones` | Listar todas las ubicaciones | — |
+| `GET` | `/api/ubicaciones/{id}` | Buscar ubicación por ID | — |
+| `PUT` | `/api/ubicaciones/{id}` | Actualizar ubicación | `{ "name" }` |
+| `DELETE` | `/api/ubicaciones/{id}` | Eliminar ubicación | — |
+
 ### Órdenes de Retiro
 
 | Método | Ruta | Descripción | Body |
@@ -273,6 +290,7 @@ Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retor
 - **Usuario**: nombre y apellido (3-150 chars), CUIL (formato XX-XXXXXXXX-X), contraseña (mínimo 8 chars, al menos una mayúscula y un dígito)
 - **Producto**: nombre (3-150 chars), descripción (3-500 chars), código de barras (máx 50 chars, opcional), proveedor requerido, origen (`FABRICANTE` o `INTERNO`), cantidades ≥ 0
 - **Proveedor**: CUIT (formato XX-XXXXXXXX-X), razón social (3-150 chars), email válido (si se provee)
+- **Ubicación**: nombre (3-100 chars, no vacío)
 - **Orden de retiro**: usuario requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
 - **Orden de compra**: proveedor requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
 

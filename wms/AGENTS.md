@@ -29,7 +29,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 `SecurityConfig.java` defines a `BCryptPasswordEncoder` bean and a filter chain with CSRF disabled. Current `permitAll()` list (single-path matchers, **exact paths only — no trailing `/**`**):
 
 - `POST /api/usuarios` and `GET /api/usuarios` → `permitAll`
-- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**` → `permitAll`
+- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**` → `permitAll`
 - Everything else → `anyRequest().authenticated()`, including:
   - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
 
@@ -41,18 +41,19 @@ There is no `UserDetailsService`, JWT, session management, or token mechanism. T
 wms/src/main/java/big_three/wms/
 ├── WmsApplication.java        # entrypoint
 ├── config/SecurityConfig.java # PasswordEncoder + SecurityFilterChain
-├── controller/                # AuthController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, UserController
-├── dto/                       # 17 DTOs, one per request/response (see API section)
+├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, UserController
+├── dto/                       # 19 DTOs, one per request/response (see API section)
 ├── exception/InvalidCredentialsException.java
-├── model/                     # User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine
-├── repository/                # 8 Spring Data JPA repositories
-└── service/                   # UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService
+├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine
+├── repository/                # 9 Spring Data JPA repositories
+└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService
 ```
 
-## Entities (8)
+## Entities (9)
 
 | Entity | Table | PK | Key relationships |
 |--------|-------|----|-------------------|
+| `Location` | `ubicacion` | `id_ubicacion` (Long, IDENTITY) | — |
 | `User` | `usuario` | `id_usuario` (Long, IDENTITY) | — |
 | `Product` | `producto` | `id_producto` (Long, IDENTITY) | `@ManyToOne` → `Proveedor` |
 | `Proveedor` | `proveedor` | `id_proveedor` (Long, IDENTITY) | — |
@@ -63,6 +64,7 @@ wms/src/main/java/big_three/wms/
 | `PurchaseOrderLine` | `linea_compra` | `@IdClass(PurchaseOrderLineId)`: `id_orden_compra` + `id_producto` | Composite PK |
 
 - `Product` has inner enum `OrigenCodigoBarras { FABRICANTE, INTERNO }` (mapped `@Enumerated(EnumType.STRING)`).
+- `Location` fields: `name` (mapped to `nombre_ubicacion`).
 - `User` fields: `nombre`, `apellido`, `cuil`, `rol` (default `"OPERARIO"`), `contrasena` (BCrypt hash).
 - `Stock`: `cantidadDisponible`, `cantidadPendiente`, `fechaHora`.
 - `PickOrderLine`: `cantidad` (Integer).
@@ -80,6 +82,7 @@ wms/src/main/java/big_three/wms/
 - **PurchaseOrder receive** (`receive`): only from `PENDIENTE`; calls `ajustarStock(idProduct, +cantidad, 0)` (`disponible += cantidad`) for every line and marks the order `RECIBIDA`. Throws `IllegalArgumentException` if already `RECIBIDA`, `RuntimeException` if `CANCELADA`.
 - **PurchaseOrder update** (`update`): replaces supplier + lines; if the order was `RECIBIDA`, it first reverses old lines' stock (`-cantidad` disponible), deletes old lines, saves new lines, then re-applies stock for the new lines.
 - **PurchaseOrder delete** (`deleteById`): if `RECIBIDA`, reverts stock (`-cantidad` disponible) before deleting lines + order.
+- **Location CRUD** (`LocationService`): simple CRUD over `ubicacion` (single `name` field). `create` saves a new `Location`; `findById`/`update` throw `RuntimeException("Ubicación no encontrada")` when missing; `deleteById` checks `existsById` first and throws `RuntimeException("Ubicación no encontrada para eliminar")` otherwise.
 - **GET /api/ordenes-retiro** returns summaries with `lineasRetiro: null`; only `GET /api/ordenes-retiro/{id}` includes the lines. Same for `GET /api/ordenes-compra` (summaries, `lines: null`) vs `GET /api/ordenes-compra/{id}` (with lines).
 - **Response DTOs never include the password hash.** Login (`UserService.login`) just verifies CUIL+password and returns the user DTO — no token/session.
 
@@ -128,6 +131,18 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 | PUT | `/api/proveedores/{id}` | No | `ProveedorCreateDTO` | `ProveedorResponseDTO` |
 | DELETE | `/api/proveedores/{id}` | No | — | 204 |
 
+### Ubicaciones — `LocationController`
+
+| Method | Path | Auth | Body | Returns |
+|--------|------|------|------|---------|
+| POST | `/api/ubicaciones` | No | `LocationCreateDTO`: `name` (3-100 chars, not blank) | 201 `LocationResponseDTO` |
+| GET | `/api/ubicaciones` | No | — | `List<LocationResponseDTO>` |
+| GET | `/api/ubicaciones/{id}` | No | — | `LocationResponseDTO` |
+| PUT | `/api/ubicaciones/{id}` | No | `LocationCreateDTO` | `LocationResponseDTO` |
+| DELETE | `/api/ubicaciones/{id}` | No | — | 204 |
+
+`LocationResponseDTO`: `id`, `name`.
+
 ### Órdenes de retiro — `PickOrderController`
 
 | Method | Path | Auth | Body | Returns |
@@ -171,7 +186,7 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 7. ~~**No global exception handler**~~ **FIXED**: `GlobalExceptionHandler` `@ControllerAdvice` maps `InvalidCredentialsException` → 401, `IllegalArgumentException` → 400, `RuntimeException` → 500.
 8. ~~**Unused dependencies in pom.xml**~~ **FIXED**: `h2` and `mysql-connector-j` removed — only PostgreSQL is used. (Note: ZXing stays — kept intentionally for planned barcode generation.)
 9. **No real authentication**: login returns a DTO but no token/session; `authenticated()` endpoints are unreachable.
-10. **Single test** (`WmsApplicationTests.contextLoads()`): no test profile, no integration/unit tests.
+10. ~~**Single test**~~ **UPDATED**: the suite is no longer a lone `contextLoads()`. Every service has a Mockito unit test (`@ExtendWith(MockitoExtension.class)`) and every controller a `@WebMvcTest` (see `src/test/java/big_three/wms/service/` and `controller/`). The only `@SpringBootTest` left is `WmsApplicationTests.contextLoads()` — see #12.
 11. ~~**PickOrderService.update() stale data risk** (`PickOrderService.java`)~~ **FIXED**: `update`/`deleteById` reuse the already-fetched line list (`deleteAll(lines)`) instead of re-querying after the stock reversal.
 12. **Test hits real DB**: `@SpringBootTest` connects to PostgreSQL — no H2/test override.
 13. ~~**Login endpoint requires auth**~~ **FIXED**: `SecurityConfig` `permitAll("/api/usuarios")` didn't cover `/api/usuarios/login`, so login fell into `anyRequest().authenticated()`. The duplicate `/api/usuarios/login` endpoint was removed entirely; login lives at the permitted `POST /api/auth/login`.
