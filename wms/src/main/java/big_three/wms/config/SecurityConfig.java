@@ -19,7 +19,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable()) //desabilita protecciones, quitar el disable para implementar Sessions o Cookies
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/ordenes-compra/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
+                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/ordenes-compra/**", "/api/ubicaciones/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
                         .anyRequest().authenticated() // pide auth para todos los endpoints que no estén arriba
                 );
         return http.build();
@@ -37,7 +37,7 @@ public class SecurityConfig {
  * método específico (GET/POST/...) tienen que declararse ANTES que cualquier
  * regla genérica que cubra el mismo path sin especificar método.
  *
- * Ruta                                  | Método            | Rol requerido
+ * Ruta                                   | Método            | Rol requerido
  * ---------------------------------------|--------------------|------------------
  * /api/auth/login                        | POST               | Público (sin rol)
  * /api/usuarios/**                       | -                  | ADMINISTRADOR
@@ -46,7 +46,7 @@ public class SecurityConfig {
  * /api/productos/**                      | -                  | Cualquier rol
  * /api/ordenes-retiro/**                 | -                  | Cualquier rol
  * /api/ordenes-compra/**                 | -                  | Cualquier rol
- *
+ * /api/ubicaciones/**                    | -                  | Cualquier rol
  * Cualquier ruta no listada arriba: anyRequest().authenticated() como cierre
  * (falla "cerrado" por default ante endpoints nuevos que no se clasifiquen).
  * ============================================================================
