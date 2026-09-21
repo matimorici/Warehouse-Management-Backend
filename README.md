@@ -229,9 +229,13 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 
 | Método | Ruta | Descripción | Body |
 |--------|------|-------------|------|
-| `POST` | `/api/auth/login` | Login (duplicado del anterior) | `{ "cuil", "contrasena" }` |
+| `POST` | `/api/auth/login` | Login | `{ "cuil", "contrasena" }` |
 
-> **Nota:** La autenticación aún no está implementada. El login retorna un DTO con los datos del usuario pero no genera token ni sesión. Los endpoints de `GET /api/usuarios`, `GET /api/usuarios/{id}` y `DELETE /api/usuarios/{id}` requieren autenticación según la configuración de seguridad, pero no hay mecanismo real para proveerla.
+El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
+
+Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
+
+> **Nota:** la autorización por rol sobre el resto de los endpoints (qué rutas requieren qué rol) todavía no está implementada — ver `TODO.md`, sección de seguridad.
 
 ### Productos
 

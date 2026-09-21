@@ -5,11 +5,15 @@ import big_three.wms.dto.UserResponseDTO;
 import big_three.wms.exception.InvalidCredentialsException;
 import big_three.wms.model.Role;
 import big_three.wms.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -26,6 +30,9 @@ class AuthControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @MockitoBean
     private UserService userService;
 
@@ -35,6 +42,17 @@ class AuthControllerTest {
     private static final String BODY = """
             {"cuil": "20-12345678-9", "contrasena": "Password1"}
             """;
+
+    @BeforeEach
+    void setUp() {
+        UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
+                .username("20-12345678-9")
+                .password(passwordEncoder.encode("Password1"))
+                .roles("OPERARIO")
+                .build();
+
+        when(userDetailsService.loadUserByUsername("20-12345678-9")).thenReturn(userDetails);
+    }
 
     @Test
     void login_validCredentials_returns200() throws Exception {
