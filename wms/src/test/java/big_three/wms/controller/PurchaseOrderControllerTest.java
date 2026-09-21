@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,9 @@ class PurchaseOrderControllerTest {
 
     @MockitoBean
     private PurchaseOrderService purchaseOrderService;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
 
     private static final String VALID_BODY = """
             {"idSupplier": 1, "lines": [{"idProduct": 1, "amount": 2}]}

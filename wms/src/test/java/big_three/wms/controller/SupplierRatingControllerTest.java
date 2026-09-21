@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +30,9 @@ class SupplierRatingControllerTest {
 
     @MockitoBean
     private SupplierRatingService ratingService;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
 
     private static final String VALID_BODY = """
             {"idSupplier": 1, "deliveryTime": 2, "deliveryMethod": "Entrega a domicilio",
