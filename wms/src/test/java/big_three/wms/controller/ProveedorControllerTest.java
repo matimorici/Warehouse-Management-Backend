@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.util.List;
 
@@ -28,6 +29,9 @@ class ProveedorControllerTest {
 
     @MockitoBean
     private ProveedorService proveedorService;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
 
     private static final String VALID_BODY = """
             {"cuit": "20-12345678-9", "razonSocial": "Razon Social", "telefono": "5555",

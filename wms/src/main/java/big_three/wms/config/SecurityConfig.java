@@ -2,7 +2,11 @@ package big_three.wms.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -18,11 +22,24 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable()) //desabilita protecciones, quitar el disable para implementar Sessions o Cookies
+                .sessionManagement(session -> session
+                        .sessionFixation(fixation -> fixation.changeSessionId())
+                )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/ordenes-compra/**", "/api/ubicaciones/**", "/api/valoraciones-proveedor/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
                         .anyRequest().authenticated() // pide auth para todos los endpoints que no estén arriba
                 );
         return http.build();
+    }
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider(UserDetailsService userDetails, PasswordEncoder password) {
+        DaoAuthenticationProvider authentication = new DaoAuthenticationProvider(userDetails);
+        authentication.setPasswordEncoder(password);
+        return authentication;
+    }
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
     }
 }
 

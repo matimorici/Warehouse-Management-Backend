@@ -40,25 +40,51 @@ CREATE DATABASE wms_db;
 
 Eso es todo. Al arrancar la aplicación, **Flyway aplica las migraciones del schema** (`db/migration/`) automáticamente y crea todas las tablas, la secuencia `codigo_interno_seq`, los índices y las constraints. Ver [Migraciones de base de datos](#migraciones-de-base-de-datos) más abajo para entender el porqué y el cómo.
 
-### 3. Configurar credenciales (opcional)
+### 3. Configurar credenciales
 
-Las credenciales por defecto están en `wms/src/main/resources/application.properties`:
+Las credenciales de conexión a PostgreSQL **no están hardcodeadas** en el repositorio — `application.properties` usa placeholders (`${DB_USERNAME}`, `${DB_PASSWORD}`) que Spring Boot resuelve contra un perfil local, para que el repo se pueda compartir sin exponer contraseñas.
 
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/wms_db
-spring.datasource.username=postgres
-spring.datasource.password=12345
-```
+**Paso 1 — Crear tu archivo de credenciales local**
 
-Si tu PostgreSQL usa otras credenciales, editá ese archivo.
-
-### 4. Ejecutar
-
-Desde la carpeta `wms/`:
+Copiá el archivo de ejemplo y renombralo:
 
 ```bash
-./mvnw spring-boot:run
+# Git Bash / macOS / Linux
+cp wms/src/main/resources/application-local.properties.example wms/src/main/resources/application-local.properties
 ```
+
+```cmd
+:: CMD de Windows
+copy wms\src\main\resources\application-local.properties.example wms\src\main\resources\application-local.properties
+```
+
+Editá `application-local.properties` con las credenciales reales de tu PostgreSQL local:
+
+```properties
+DB_USERNAME=postgres
+DB_PASSWORD=tu_contraseña
+```
+
+> Este archivo está en `.gitignore` — nunca se sube al repositorio. Cada integrante del equipo crea el suyo con sus propias credenciales locales.
+
+**Paso 2 — Activar el perfil `local`**
+
+Sin esto, Spring Boot no va a leer `application-local.properties` y falla al arrancar (`Could not resolve placeholder 'DB_USERNAME'`).
+
+- **Desde IntelliJ:** `Run → Edit Configurations` → seleccionar la configuración de `WmsApplication` → campo **Active profiles** → escribir `local`.
+- **Desde la terminal (Bash o CMD, el comando es el mismo):**
+```bash
+  ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+### 4. Ejecutar
+
+Desde la carpeta `wms/`, con el perfil `local` activado (ver paso anterior):
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+O simplemente `./mvnw spring-boot:run` si ya activaste el perfil `local` en tu Run Configuration de IntelliJ.
 
 La aplicación arranca en **http://localhost:8080**.
 
@@ -227,9 +253,13 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 
 | Método | Ruta | Descripción | Body |
 |--------|------|-------------|------|
-| `POST` | `/api/auth/login` | Login (duplicado del anterior) | `{ "cuil", "contrasena" }` |
+| `POST` | `/api/auth/login` | Login | `{ "cuil", "contrasena" }` |
 
-> **Nota:** La autenticación aún no está implementada. El login retorna un DTO con los datos del usuario pero no genera token ni sesión. Los endpoints de `GET /api/usuarios`, `GET /api/usuarios/{id}` y `DELETE /api/usuarios/{id}` requieren autenticación según la configuración de seguridad, pero no hay mecanismo real para proveerla.
+El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
+
+Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
+
+> **Nota:** la autorización por rol sobre el resto de los endpoints (qué rutas requieren qué rol) todavía no está implementada — ver `TODO.md`, sección de seguridad.
 
 ### Productos
 

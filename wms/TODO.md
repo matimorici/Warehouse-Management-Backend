@@ -6,16 +6,15 @@ Actionable items noticed while working on this codebase. Keep this up to date as
 
 Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordado: **SESSIONS (HttpSession), NO JWT**.
 
-0. [ ] **Preparación del terreno**
+0. [X] **Preparación del terreno**
     - [X] Convertir `User.rol` de `String` a `enum Role { OPERARIO, ADMINISTRADOR }` con `@Enumerated(EnumType.STRING)`. No requiere migración de Flyway nueva: la columna sigue guardando el mismo texto (`"OPERARIO"`/`"ADMINISTRADOR"`), solo cambia cómo lo lee el código Java.
     - [X] Clasificar todos los endpoints por rol (ver tabla más abajo).
-    - [ ] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
-
-1. [ ] **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
-2. [ ] **`DaoAuthenticationProvider`**: configurar con el bean `BCryptPasswordEncoder` ya existente en `SecurityConfig`, más el `UserDetailsService` del punto anterior. Exponer el bean `AuthenticationManager` (`AuthenticationConfiguration.getAuthenticationManager()`).
-3. [ ] **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` vía `HttpSessionSecurityContextRepository`. Tras el login, el frontend recibe la cookie de sesión (`JSESSIONID`).
-    - [ ] Protección contra session fixation: `sessionFixation().changeSessionId()` (default de Spring, dejarlo explícito en la config).
-    - [ ] Definir y configurar timeout de sesión (`server.servlet.session.timeout`).
+    - [X] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
+1. [X] **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
+2. [X] **`DaoAuthenticationProvider`**: configurar con el bean `BCryptPasswordEncoder` ya existente en `SecurityConfig`, más el `UserDetailsService` del punto anterior. Exponer el bean `AuthenticationManager` (`AuthenticationConfiguration.getAuthenticationManager()`).
+3. [X] **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` vía `HttpSessionSecurityContextRepository`. Tras el login, el frontend recibe la cookie de sesión (`JSESSIONID`).
+    - [X] Protección contra session fixation: `sessionFixation().changeSessionId()` (default de Spring, dejarlo explícito en la config).
+    - [X] Definir y configurar timeout de sesión (`server.servlet.session.timeout`).
 4. [ ] **Logout**: endpoint `POST /api/auth/logout` que invalide la sesión (`SecurityContextLogoutHandler`, `invalidateHttpSession = true`).
 5. [ ] **CSRF**: re-habilitar (hoy está `csrf.disable()`). Usar `CookieCsrfTokenRepository.withHttpOnlyFalse()` para que Angular (localhost:4200) lea la cookie `XSRF-TOKEN` y la envíe en el header `X-XSRF-TOKEN`.
 6. [ ] **Autorización por rol**: reemplazar el `permitAll()` masivo actual de `SecurityConfig` por reglas `hasRole('ADMINISTRADOR')` / `hasAnyRole('OPERARIO','ADMINISTRADOR')` según la tabla de rutas de la Fase 0. Cerrar con `anyRequest().authenticated()` al final, para que cualquier endpoint nuevo que se agregue después quede protegido por default.
