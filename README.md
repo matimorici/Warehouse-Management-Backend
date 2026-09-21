@@ -136,6 +136,7 @@ wms/src/main/java/big_three/wms/
 │   ├── ProductController.java       # CRUD productos + stock
 │   ├── ProveedorController.java     # CRUD proveedores
 │   ├── PurchaseOrderController.java # CRUD órdenes de compra + recibir
+│   ├── SupplierRatingController.java # CRUD valoraciones de proveedor
 │   └── UserController.java          # CRUD usuarios
 ├── dto/
 │   ├── LocationCreateDTO.java
@@ -155,6 +156,8 @@ wms/src/main/java/big_three/wms/
 │   ├── PurchaseOrderResponseDTO.java
 │   ├── StockResponseDTO.java
 │   ├── StockUpdateDTO.java
+│   ├── SupplierRatingCreateDTO.java
+│   ├── SupplierRatingResponseDTO.java
 │   ├── UserCreateDTO.java
 │   └── UserResponseDTO.java
 ├── exception/
@@ -168,6 +171,7 @@ wms/src/main/java/big_three/wms/
 │   ├── PurchaseOrder.java           # Orden de compra (enum Status)
 │   ├── PurchaseOrderLine.java       # Línea de orden de compra (composite PK)
 │   ├── Stock.java                   # Stock (1:1 con Product)
+│   ├── SupplierRating.java          # Valoración de proveedor
 │   └── User.java                    # Usuario
 ├── repository/
 │   ├── LocationRepository.java
@@ -178,6 +182,7 @@ wms/src/main/java/big_three/wms/
 │   ├── PurchaseOrderLineRepository.java
 │   ├── PurchaseOrderRepository.java
 │   ├── StockRepository.java
+│   ├── SupplierRatingRepository.java
 │   └── UserRepository.java
 └── service/
     ├── LocationService.java
@@ -185,6 +190,7 @@ wms/src/main/java/big_three/wms/
     ├── ProductService.java
     ├── ProveedorService.java
     ├── PurchaseOrderService.java
+    ├── SupplierRatingService.java
     └── UserService.java
 ```
 
@@ -201,6 +207,7 @@ wms/src/main/java/big_three/wms/
 | **PickOrderLine** | `linea_retiro` | Línea de una orden de retiro. PK compuesta: `id_orden_retiro` + `id_producto`. Cantidad a retirar. |
 | **PurchaseOrder** | `orden_compra` | Orden de compra a un proveedor. Tiene estado (`PENDIENTE`/`RECIBIDA`/`CANCELADA`), fecha/hora y una o más líneas. |
 | **PurchaseOrderLine** | `linea_compra` | Línea de una orden de compra. PK compuesta: `id_orden_compra` + `id_producto`. Cantidad. |
+| **SupplierRating** | `valoracion_proveedor` | Valoración de un proveedor (tiempo de entrega, forma de entrega, relación precio/calidad). Asociada a un proveedor por `id_supplier` (raw Long). |
 
 ## API REST
 
@@ -258,6 +265,18 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 | `PUT` | `/api/ubicaciones/{id}` | Actualizar ubicación | `{ "name" }` |
 | `DELETE` | `/api/ubicaciones/{id}` | Eliminar ubicación | — |
 
+### Valoraciones de Proveedor
+
+| Método | Ruta | Descripción | Body |
+|--------|------|-------------|------|
+| `POST` | `/api/valoraciones-proveedor` | Crear valoración | `{ "idSupplier", "deliveryTime"?, "deliveryMethod"?, "priceQualityRatio"? }` |
+| `GET` | `/api/valoraciones-proveedor` | Listar todas las valoraciones (filtrable por `?idSupplier=`) | — |
+| `GET` | `/api/valoraciones-proveedor/{id}` | Buscar valoración por ID | — |
+| `PUT` | `/api/valoraciones-proveedor/{id}` | Actualizar valoración | `{ "idSupplier", "deliveryTime"?, "deliveryMethod"?, "priceQualityRatio"? }` |
+| `DELETE` | `/api/valoraciones-proveedor/{id}` | Eliminar valoración | — |
+
+> La fecha/hora (`dateTime`) se asigna automáticamente al crear y al actualizar. El proveedor debe existir al crear. Al actualizar **no se cambia el proveedor** de la valoración (el campo `idSupplier` del body se ignora en `PUT`); solo se actualizan `deliveryTime`, `deliveryMethod` y `priceQualityRatio`.
+
 ### Órdenes de Retiro
 
 | Método | Ruta | Descripción | Body |
@@ -293,6 +312,7 @@ Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retor
 - **Ubicación**: nombre (3-100 chars, no vacío)
 - **Orden de retiro**: usuario requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
 - **Orden de compra**: proveedor requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
+- **Valoración de proveedor**: proveedor requerido, tiempo de entrega ≥ 0, forma de entrega y relación precio/calidad (máx 100 chars, opcionales)
 
 ## Issues conocidos
 

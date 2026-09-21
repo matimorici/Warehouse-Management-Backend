@@ -29,7 +29,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 `SecurityConfig.java` defines a `BCryptPasswordEncoder` bean and a filter chain with CSRF disabled. Current `permitAll()` list (single-path matchers, **exact paths only — no trailing `/**`**):
 
 - `POST /api/usuarios` and `GET /api/usuarios` → `permitAll`
-- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**` → `permitAll`
+- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**`, `/api/valoraciones-proveedor/**` → `permitAll`
 - Everything else → `anyRequest().authenticated()`, including:
   - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
 
@@ -41,15 +41,15 @@ There is no `UserDetailsService`, JWT, session management, or token mechanism. T
 wms/src/main/java/big_three/wms/
 ├── WmsApplication.java        # entrypoint
 ├── config/SecurityConfig.java # PasswordEncoder + SecurityFilterChain
-├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, UserController
-├── dto/                       # 19 DTOs, one per request/response (see API section)
+├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, SupplierRatingController, UserController
+├── dto/                       # 21 DTOs, one per request/response (see API section)
 ├── exception/InvalidCredentialsException.java
-├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine
-├── repository/                # 9 Spring Data JPA repositories
-└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService
+├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine, SupplierRating
+├── repository/                # 10 Spring Data JPA repositories
+└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, SupplierRatingService
 ```
 
-## Entities (9)
+## Entities (10)
 
 | Entity | Table | PK | Key relationships |
 |--------|-------|----|-------------------|
@@ -62,6 +62,7 @@ wms/src/main/java/big_three/wms/
 | `PickOrderLine` | `linea_retiro` | `@IdClass(PickOrderLineId)`: `id_orden_retiro` + `id_producto` | Composite PK |
 | `PurchaseOrder` | `orden_compra` | `id_orden_compra` (Long, IDENTITY) | `idSupplier` stored as raw `Long` (no JPA FK, DB FK only) — same pattern as `PickOrder.idUsuario` |
 | `PurchaseOrderLine` | `linea_compra` | `@IdClass(PurchaseOrderLineId)`: `id_orden_compra` + `id_producto` | Composite PK |
+| `SupplierRating` | `valoracion_proveedor` | `id_valoracion` (Long, IDENTITY) | `idSupplier` stored as raw `Long` (no JPA FK, DB FK `ON DELETE CASCADE` only) — same pattern as `PurchaseOrder.idSupplier` |
 
 - `Product` has inner enum `OrigenCodigoBarras { FABRICANTE, INTERNO }` (mapped `@Enumerated(EnumType.STRING)`).
 - `Location` fields: `name` (mapped to `nombre_ubicacion`).
@@ -69,6 +70,7 @@ wms/src/main/java/big_three/wms/
 - `Stock`: `cantidadDisponible`, `cantidadPendiente`, `fechaHora`.
 - `PickOrderLine`: `cantidad` (Integer).
 - `PurchaseOrder`: inner enum `Status { PENDIENTE, RECIBIDA, CANCELADA }` (mapped `@Enumerated(EnumType.STRING)`).
+- `SupplierRating`: `id` (mapped to `id_valoracion`), `idSupplier` (mapped to `id_proveedor`), `dateTime` (mapped to `fecha_hora`), `deliveryTime` (mapped to `tiempo_entrega`, nullable), `deliveryMethod` (mapped to `forma_entrega`), `priceQualityRatio` (mapped to `relacion_precio_calidad`).
 
 ## Business logic (important)
 
@@ -83,6 +85,7 @@ wms/src/main/java/big_three/wms/
 - **PurchaseOrder update** (`update`): replaces supplier + lines; if the order was `RECIBIDA`, it first reverses old lines' stock (`-cantidad` disponible), deletes old lines, saves new lines, then re-applies stock for the new lines.
 - **PurchaseOrder delete** (`deleteById`): if `RECIBIDA`, reverts stock (`-cantidad` disponible) before deleting lines + order.
 - **Location CRUD** (`LocationService`): simple CRUD over `ubicacion` (single `name` field). `create` saves a new `Location`; `findById`/`update` throw `RuntimeException("Ubicación no encontrada")` when missing; `deleteById` checks `existsById` first and throws `RuntimeException("Ubicación no encontrada para eliminar")` otherwise.
+- **SupplierRating CRUD** (`SupplierRatingService`): creates a rating for a supplier. `create` validates the supplier exists (`ProveedorRepository.findById(...)` → `RuntimeException("Proveedor no encontrado")`), sets `dateTime`=now, and stores the rest of the fields. `findBySupplier` validates the supplier exists too (`existsById`), then returns its ratings (empty list if none). `update` does **not** change `idSupplier` (the DTO field is ignored on `PUT` in the service) — only `deliveryTime`, `deliveryMethod`, `priceQualityRatio`, and refreshes `dateTime`; throws `RuntimeException("Valoración no encontrada")` if the rating is missing. `deleteById` checks `existsById` first and throws `RuntimeException("Valoración no encontrada para eliminar")` otherwise.
 - **GET /api/ordenes-retiro** returns summaries with `lineasRetiro: null`; only `GET /api/ordenes-retiro/{id}` includes the lines. Same for `GET /api/ordenes-compra` (summaries, `lines: null`) vs `GET /api/ordenes-compra/{id}` (with lines).
 - **Response DTOs never include the password hash.** Login (`UserService.login`) just verifies CUIL+password and returns the user DTO — no token/session.
 
@@ -165,6 +168,18 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 | DELETE | `/api/ordenes-compra/{id}` | No | — | 204 (reverts stock if `RECIBIDA`) |
 
 `PurchaseOrderResponseDTO`: `idPurchaseOrder`, `dateTime`, `idSupplier`, `status` (`PENDIENTE`/`RECIBIDA`/`CANCELADA`), `lines`. `PurchaseOrderLineResponseDTO`: `idProduct`, `amount`.
+
+### Valoraciones de proveedor — `SupplierRatingController`
+
+| Method | Path | Auth | Body | Returns |
+|--------|------|------|------|---------|
+| POST | `/api/valoraciones-proveedor` | No | `SupplierRatingCreateDTO`: `idSupplier` (required), `deliveryTime`? (≥ 0), `deliveryMethod`? (≤ 100 chars), `priceQualityRatio`? (≤ 100 chars) | 201 `SupplierRatingResponseDTO` |
+| GET | `/api/valoraciones-proveedor` | No | — (optional `?idSupplier=` filter) | `List<SupplierRatingResponseDTO>` (all, or filtered by supplier via `findBySupplier`) |
+| GET | `/api/valoraciones-proveedor/{id}` | No | — | `SupplierRatingResponseDTO` |
+| PUT | `/api/valoraciones-proveedor/{id}` | No | `SupplierRatingCreateDTO` | `SupplierRatingResponseDTO` |
+| DELETE | `/api/valoraciones-proveedor/{id}` | No | — | 204 |
+
+`SupplierRatingResponseDTO`: `id`, `dateTime`, `idSupplier`, `deliveryTime`, `deliveryMethod`, `priceQualityRatio`. When the `?idSupplier=` query param is present, the controller delegates to `findBySupplier` (validates the supplier exists → 500 via `RuntimeException`); otherwise `findAll`. The `GET /{id}` path takes precedence over the `?idSupplier=` filter when both are given on the same URL.
 
 ## Error handling
 
