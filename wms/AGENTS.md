@@ -21,7 +21,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 - **DB**: PostgreSQL `wms_db` on `localhost:5432`, user `postgres`, password `12345` (hardcoded in `application.properties`). **Schema is owned by Flyway** (`org.flywaydb:flyway-core` + `flyway-database-postgresql`): migrations live in `src/main/resources/db/migration/` and run automatically at startup, before Hibernate. Current chain: `V1__create_schema.sql` (full schema incl. `codigo_interno_seq` and tables with no JPA entity yet — reserved for planned features), `V2__ensure_codigo_interno_seq.sql` (repair for old baselined DBs missing the sequence — no-op on fresh DBs), `V3__seed_admin_user.sql` (default admin: CUIL `20-00000000-1`, password `Admin1234`, rol `ADMINISTRADOR`). `spring.flyway.baseline-on-migrate=true` — existing dev DBs (created with the old `wms_schema.sql`) are baseline-marked as V1 on first boot, no data loss; fresh DBs build from scratch. The old script survives read-only at `src/main/resources/db/wms_schema.sql` as historical reference only. `ddl-auto=validate` only verifies entities match the migrated schema. `show-sql=true`, `open-in-view=false`.
 - **No test profile / H2 override** — `@SpringBootTest` hits real PostgreSQL. `h2`/`mysql-connector-j` were removed from `pom.xml` (PostgreSQL only); only `postgresql` runtime driver remains.
 - **Frontend CORS**: `http://localhost:4200` (Angular), set per-controller via `@CrossOrigin`.
-- **Libraries**: ZXing 3.5.3 (barcode generation) declared but not used anywhere yet — kept intentionally for a planned feature. Lombok excluded from final artifact by `spring-boot-maven-plugin`.
+- **Libraries**: ZXing 3.5.3 (`core` + `javase`) used by `BarcodeService` to render product barcodes (`GET /api/productos/{id}/barcode`). Lombok excluded from final artifact by `spring-boot-maven-plugin`.
 - `wms/doc/` contains generated Javadoc — ignore it.
 
 ## Security
@@ -37,7 +37,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 Current `permitAll()` list (single-path matchers, **exact paths only — no trailing `/**`**):
 
 - `POST /api/usuarios` and `GET /api/usuarios` → `permitAll`
-- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**`, `/api/valoraciones-proveedor/**` → `permitAll`
+- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**`, `/api/valoraciones-proveedor/**`, `/api/movimientos-fisicos/**` → `permitAll`
 - Everything else → `anyRequest().authenticated()`, including:
   - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
 
@@ -54,7 +54,7 @@ wms/src/main/java/big_three/wms/
 ├── exception/InvalidCredentialsException.java
 ├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine, SupplierRating, PhysicalMovement
 ├── repository/                # 11 Spring Data JPA repositories
-└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, SupplierRatingService, PhysicalMovementService
+└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, SupplierRatingService, PhysicalMovementService, BarcodeService
 ```
 
 ## Entities (11)
@@ -87,6 +87,7 @@ wms/src/main/java/big_three/wms/
 - **Product create** (`ProductService.create`): if `codigoBarras` is provided and unique → `origen = FABRICANTE`; if blank/null → generates `INT-XXXXXX` via `nextval('codigo_interno_seq')` and `origen = INTERNO`. Also creates a `Stock` row (defaults to 0). Duplicate barcode → `IllegalArgumentException`. The sequence is created by migration `V1__create_schema.sql` (`codigo_interno_seq`).
 - **Product update** (`update`): also upserts the `Stock` row (creates with 0s if missing). Existing product + no new barcode keeps its barcode/origen.
 - **Product delete** (`deleteById`): deletes the `Stock` row first (if present), then the `Product` — no orphans. Note: the `stock` FK already has `ON DELETE CASCADE` at the DB level, so the manual delete is defensive belt-and-suspenders, not the sole guard — keep it.
+- **Barcode generation** (`BarcodeService.getBarcodePng`): renders the product's `codigoBarras` as a CODE_128 PNG via ZXing (`MultiFormatWriter` + `MatrixToImageWriter`, 300x120, black-on-white) for `GET /api/productos/{id}/barcode`; throws `RuntimeException("Producto no encontrado")` → 500 if the product is missing, and a `RuntimeException` if encoding/`ImageIO` fails.
 - **PickOrder create** (`PickOrderService.create`): validates `idUsuario` and every `idProducto` exist, saves order + lines, then calls `productService.ajustarStock(idProducto, -cantidad, +cantidad)` → `disponible -= cantidad`, `pendiente += cantidad`; throws if `disponible` would go negative.
 - **PickOrder update** (`update`): reverses old lines' stock, deletes old lines, saves new lines, applies new stock deltas. Known stale-data risk (see Known issues).
 - **PickOrder delete** (`deleteById`): reverts stock (`+cantidad` disponible, `-cantidad` pendiente), deletes lines, deletes order.
@@ -138,6 +139,7 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 | DELETE | `/api/productos/{id}` | No | — | 204 |
 | GET | `/api/productos/{id}/stock` | No | — | `StockResponseDTO` |
 | PUT | `/api/productos/{id}/stock` | No | `StockUpdateDTO`: `cantidadDisponible`?, `cantidadPendiente`? | `StockResponseDTO` |
+| GET | `/api/productos/{id}/barcode` | No | — | `image/png` bytes (ZXing CODE_128 of the product's `codigoBarras`); 500 `{"error"}` if the product is missing |
 
 `ProductResponseDTO`: `idProducto`, `nombreProducto`, `descripcionProducto`, `codigoBarras`, `idProveedor`, `origenCodigoBarras`, `cantidadDisponible`, `cantidadPendiente`, `stockFechaHora`.
 
