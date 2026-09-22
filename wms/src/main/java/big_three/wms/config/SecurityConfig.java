@@ -26,7 +26,7 @@ public class SecurityConfig {
                         .sessionFixation(fixation -> fixation.changeSessionId())
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/ordenes-compra/**", "/api/ubicaciones/**", "/api/valoraciones-proveedor/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
+                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/ordenes-compra/**", "/api/ubicaciones/**", "/api/valoraciones-proveedor/**", "/api/movimientos-fisicos/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
                         .anyRequest().authenticated() // pide auth para todos los endpoints que no estén arriba
                 );
         return http.build();
@@ -65,6 +65,7 @@ public class SecurityConfig {
  * /api/ordenes-compra/**                 | -                  | Cualquier rol
  * /api/ubicaciones/**                    | -                  | Cualquier rol
  * /api/valoraciones-proveedor/**         | -                  | Cualquier rol
+ * /api/movimientos-fisicos/**            | -                  | Cualquier rol
  * Cualquier ruta no listada arriba: anyRequest().authenticated() como cierre
  * (falla "cerrado" por default ante endpoints nuevos que no se clasifiquen).
  * ============================================================================
