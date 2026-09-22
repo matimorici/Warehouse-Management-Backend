@@ -4,9 +4,12 @@ import big_three.wms.dto.ProductCreateDTO;
 import big_three.wms.dto.ProductResponseDTO;
 import big_three.wms.dto.StockResponseDTO;
 import big_three.wms.dto.StockUpdateDTO;
+import big_three.wms.service.BarcodeService;
 import big_three.wms.service.ProductService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,9 +21,11 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final BarcodeService barcodeService;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, BarcodeService barcodeService) {
         this.productService = productService;
+        this.barcodeService = barcodeService;
     }
 
     @PostMapping
@@ -49,6 +54,15 @@ public class ProductController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         productService.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/barcode")
+    public ResponseEntity<byte[]> getBarcode(@PathVariable Long id) {
+        byte[] png = barcodeService.getBarcodePng(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"barcode-" + id + ".png\"")
+                .body(png);
     }
 
     @GetMapping("/{id}/stock")
