@@ -49,15 +49,15 @@ Role-based authorization (which authenticated routes require which role) is not 
 wms/src/main/java/big_three/wms/
 ├── WmsApplication.java        # entrypoint
 ├── config/SecurityConfig.java # PasswordEncoder + SecurityFilterChain
-├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, SupplierRatingController, UserController
-├── dto/                       # 21 DTOs, one per request/response (see API section)
+├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, SupplierRatingController, UserController, PhysicalMovementController
+├── dto/                       # 23 DTOs, one per request/response (see API section)
 ├── exception/InvalidCredentialsException.java
-├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine, SupplierRating
-├── repository/                # 10 Spring Data JPA repositories
-└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, SupplierRatingService
+├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine, SupplierRating, PhysicalMovement
+├── repository/                # 11 Spring Data JPA repositories
+└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, SupplierRatingService, PhysicalMovementService
 ```
 
-## Entities (10)
+## Entities (11)
 
 | Entity | Table | PK | Key relationships |
 |--------|-------|----|-------------------|
@@ -71,6 +71,7 @@ wms/src/main/java/big_three/wms/
 | `PurchaseOrder` | `orden_compra` | `id_orden_compra` (Long, IDENTITY) | `idSupplier` stored as raw `Long` (no JPA FK, DB FK only) — same pattern as `PickOrder.idUsuario` |
 | `PurchaseOrderLine` | `linea_compra` | `@IdClass(PurchaseOrderLineId)`: `id_orden_compra` + `id_producto` | Composite PK |
 | `SupplierRating` | `valoracion_proveedor` | `id_valoracion` (Long, IDENTITY) | `idSupplier` stored as raw `Long` (no JPA FK, DB FK `ON DELETE CASCADE` only) — same pattern as `PurchaseOrder.idSupplier` |
+| `PhysicalMovement` | `movimiento_fisico` | `@IdClass(PhysicalMovementId)`: `id_producto` + `fecha_hora` | Composite PK; `idProduct`, `idUser`, `idLocationFrom`/`idLocationTo` all stored as raw `Long`s (no JPA FKs) |
 
 - `Product` has inner enum `OrigenCodigoBarras { FABRICANTE, INTERNO }` (mapped `@Enumerated(EnumType.STRING)`).
 - `Location` fields: `name` (mapped to `nombre_ubicacion`).
@@ -79,6 +80,7 @@ wms/src/main/java/big_three/wms/
 - `PickOrderLine`: `cantidad` (Integer).
 - `PurchaseOrder`: inner enum `Status { PENDIENTE, RECIBIDA, CANCELADA }` (mapped `@Enumerated(EnumType.STRING)`).
 - `SupplierRating`: `id` (mapped to `id_valoracion`), `idSupplier` (mapped to `id_proveedor`), `dateTime` (mapped to `fecha_hora`), `deliveryTime` (mapped to `tiempo_entrega`, nullable), `deliveryMethod` (mapped to `forma_entrega`), `priceQualityRatio` (mapped to `relacion_precio_calidad`).
+- `PhysicalMovement`: `idProduct` (mapped to `id_producto`, part of PK), `dateTime` (mapped to `fecha_hora`, part of PK), `idLocationFrom` (mapped to `id_ubicacion_desde`, nullable), `idLocationTo` (mapped to `id_ubicacion_hasta`), `idUser` (mapped to `id_usuario`).
 
 ## Business logic (important)
 
@@ -94,6 +96,7 @@ wms/src/main/java/big_three/wms/
 - **PurchaseOrder delete** (`deleteById`): if `RECIBIDA`, reverts stock (`-cantidad` disponible) before deleting lines + order.
 - **Location CRUD** (`LocationService`): simple CRUD over `ubicacion` (single `name` field). `create` saves a new `Location`; `findById`/`update` throw `RuntimeException("Ubicación no encontrada")` when missing; `deleteById` checks `existsById` first and throws `RuntimeException("Ubicación no encontrada para eliminar")` otherwise.
 - **SupplierRating CRUD** (`SupplierRatingService`): creates a rating for a supplier. `create` validates the supplier exists (`ProveedorRepository.findById(...)` → `RuntimeException("Proveedor no encontrado")`), sets `dateTime`=now, and stores the rest of the fields. `findBySupplier` validates the supplier exists too (`existsById`), then returns its ratings (empty list if none). `update` does **not** change `idSupplier` (the DTO field is ignored on `PUT` in the service) — only `deliveryTime`, `deliveryMethod`, `priceQualityRatio`, and refreshes `dateTime`; throws `RuntimeException("Valoración no encontrada")` if the rating is missing. `deleteById` checks `existsById` first and throws `RuntimeException("Valoración no encontrada para eliminar")` otherwise.
+- **Physical movement** (`PhysicalMovementService`): **append-only event log** — creates records and reads them; there is no update/delete (no `PUT`/`DELETE` endpoints). `create` validates that the product, source location (only when provided), destination location, and user exist — each failure throws `IllegalArgumentException` (→ 400, unlike the rest of the app's "no encontrado" which is `RuntimeException` → 500) — and stamps `dateTime`=now server-side (`LocalDateTime.now()`). The service **does not touch `Stock`**.
 - **GET /api/ordenes-retiro** returns summaries with `lineasRetiro: null`; only `GET /api/ordenes-retiro/{id}` includes the lines. Same for `GET /api/ordenes-compra` (summaries, `lines: null`) vs `GET /api/ordenes-compra/{id}` (with lines).
 - **Response DTOs never include the password hash.** Login (`UserService.login`) just verifies CUIL+password and returns the user DTO — no token/session.
 
@@ -188,6 +191,17 @@ All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All rout
 | DELETE | `/api/valoraciones-proveedor/{id}` | No | — | 204 |
 
 `SupplierRatingResponseDTO`: `id`, `dateTime`, `idSupplier`, `deliveryTime`, `deliveryMethod`, `priceQualityRatio`. When the `?idSupplier=` query param is present, the controller delegates to `findBySupplier` (validates the supplier exists → 500 via `RuntimeException`); otherwise `findAll`. The `GET /{id}` path takes precedence over the `?idSupplier=` filter when both are given on the same URL.
+
+### Movimientos físicos — `PhysicalMovementController`
+
+| Method | Path | Auth | Body | Returns |
+|--------|------|------|------|---------|
+| POST | `/api/movimientos-fisicos` | No | `PhysicalMovementCreateDTO`: `idProduct` (required), `idLocationTo` (required), `idUser` (required), `idLocationFrom`? | 201 `PhysicalMovementResponseDTO` |
+| GET | `/api/movimientos-fisicos` | No | — (optional filters `?idProduct=`, `?idUser=`, `?from=&to=`) | `List<PhysicalMovementResponseDTO>` |
+
+Append-only feature: there is no `PUT` (update) or `DELETE`, and no `GET /{id}` (the composite PK includes a `LocalDateTime`). The `dateTime` is always generated server-side (`LocalDateTime.now()`); it cannot be set by the client.
+
+`PhysicalMovementResponseDTO`: `idProduct`, `dateTime`, `idLocationFrom`, `idLocationTo`, `idUser`. Filter precedence when several params are given on the same URL: `?idProduct=` → `?idUser=` → `?from=` + `?to=` (both required, else `IllegalArgumentException` → 400) → no params = all. Missing referenced records on `create` throw `IllegalArgumentException` → 400.
 
 ## Error handling
 
