@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -22,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 @WebMvcTest(AuthController.class)
 @Import(SecurityConfig.class)
@@ -75,5 +75,18 @@ class AuthControllerTest {
                         .content(BODY))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("CUIL o contraseña incorrectos"));
+    }
+
+    @Test
+    void logout_validCredentials_returns204() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                        .with(user("20-12345678-9")))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void logout_invalidCredentials_returns403WithError() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isForbidden());
     }
 }

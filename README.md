@@ -254,6 +254,7 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 | Método | Ruta | Descripción | Body |
 |--------|------|-------------|------|
 | `POST` | `/api/auth/login` | Login | `{ "cuil", "contrasena" }` |
+| `POST` | `/api/auth/logout` | Logout (requiere sesión activa) | — |
 
 El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
 

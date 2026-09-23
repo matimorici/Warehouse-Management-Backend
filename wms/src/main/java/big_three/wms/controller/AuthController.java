@@ -12,6 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,5 +39,12 @@ public class AuthController {
         sessionSecurity.saveContext(context, request, response);
         UserResponseDTO responseDTO = userService.login(dto);
         return ResponseEntity.ok(responseDTO);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
+        logoutHandler.logout(request, response, null);
+        return ResponseEntity.noContent().build();
     }
 }

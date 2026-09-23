@@ -15,7 +15,7 @@ Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordad
 3. [X] **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` vía `HttpSessionSecurityContextRepository`. Tras el login, el frontend recibe la cookie de sesión (`JSESSIONID`).
     - [X] Protección contra session fixation: `sessionFixation().changeSessionId()` (default de Spring, dejarlo explícito en la config).
     - [X] Definir y configurar timeout de sesión (`server.servlet.session.timeout`).
-4. [ ] **Logout**: endpoint `POST /api/auth/logout` que invalide la sesión (`SecurityContextLogoutHandler`, `invalidateHttpSession = true`).
+4. [X] **Logout**: endpoint `POST /api/auth/logout` que invalide la sesión (`SecurityContextLogoutHandler`, `invalidateHttpSession = true`).
 5. [ ] **CSRF**: re-habilitar (hoy está `csrf.disable()`). Usar `CookieCsrfTokenRepository.withHttpOnlyFalse()` para que Angular (localhost:4200) lea la cookie `XSRF-TOKEN` y la envíe en el header `X-XSRF-TOKEN`.
 6. [ ] **Autorización por rol**: reemplazar el `permitAll()` masivo actual de `SecurityConfig` por reglas `hasRole('ADMINISTRADOR')` / `hasAnyRole('OPERARIO','ADMINISTRADOR')` según la tabla de rutas de la Fase 0. Cerrar con `anyRequest().authenticated()` al final, para que cualquier endpoint nuevo que se agregue después quede protegido por default.
 7. [ ] **Endurecimiento adicional** (independientes entre sí, se pueden hacer en cualquier orden o en paralelo con el punto 8):
