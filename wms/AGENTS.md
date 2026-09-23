@@ -33,6 +33,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 - `filterChain`: CSRF still disabled (pending Fase 4). Session management configured with `sessionFixation().changeSessionId()` (session ID regenerated on login). Session timeout: `server.servlet.session.timeout=90m` (`application.properties`).
 
 `POST /api/auth/login` (`AuthController`) authenticates via `AuthenticationManager.authenticate(...)`, stores the result in the `SecurityContext`, and persists it to the `HttpSession` via `HttpSessionSecurityContextRepository` — this is what generates the `JSESSIONID` cookie. `UserService.login()` still runs afterward to build the response DTO; the CUIL/password check now effectively happens twice (once via `AuthenticationManager`, once inside `UserService.login`) — known duplication, not yet cleaned up (see `TODO.md`).
+`POST /api/auth/logout` invalidates the session via `SecurityContextLogoutHandler`. Not in `permitAll()` — requires an authenticated request. Unauthenticated requests get `403`, consistent with the rest of the app's default Spring Security behavior (no `httpBasic()`/`formLogin()` configured).
 
 Current `permitAll()` list (single-path matchers, **exact paths only — no trailing `/**`**):
 
