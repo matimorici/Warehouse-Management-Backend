@@ -156,12 +156,17 @@ wms/src/main/java/big_three/wms/
 ├── config/
 │   └── SecurityConfig.java          # Configuración de seguridad
 ├── controller/
-│   ├── AuthController.java          # Login (duplicado)
+│   ├── AuthController.java          # Login
+│   ├── LocationController.java      # CRUD ubicaciones
 │   ├── PickOrderController.java     # CRUD órdenes de retiro
 │   ├── ProductController.java       # CRUD productos + stock
 │   ├── ProveedorController.java     # CRUD proveedores
-│   └── UserController.java          # CRUD usuarios + login
+│   ├── PurchaseOrderController.java # CRUD órdenes de compra + recibir
+│   ├── SupplierRatingController.java # CRUD valoraciones de proveedor
+│   └── UserController.java          # CRUD usuarios
 ├── dto/
+│   ├── LocationCreateDTO.java
+│   ├── LocationResponseDTO.java
 │   ├── LoginRequestDTO.java
 │   ├── PickOrderCreateDTO.java
 │   ├── PickOrderLineCreateDTO.java
@@ -171,45 +176,64 @@ wms/src/main/java/big_three/wms/
 │   ├── ProductResponseDTO.java
 │   ├── ProveedorCreateDTO.java
 │   ├── ProveedorResponseDTO.java
+│   ├── PurchaseOrderCreateDTO.java
+│   ├── PurchaseOrderLineCreateDTO.java
+│   ├── PurchaseOrderLineResponseDTO.java
+│   ├── PurchaseOrderResponseDTO.java
 │   ├── StockResponseDTO.java
 │   ├── StockUpdateDTO.java
+│   ├── SupplierRatingCreateDTO.java
+│   ├── SupplierRatingResponseDTO.java
 │   ├── UserCreateDTO.java
 │   └── UserResponseDTO.java
 ├── exception/
 │   └── InvalidCredentialsException.java
 ├── model/
+│   ├── Location.java               # Ubicación
 │   ├── PickOrder.java               # Orden de retiro
 │   ├── PickOrderLine.java           # Línea de orden de retiro (composite PK)
 │   ├── Product.java                 # Producto (enum OrigenCodigoBarras)
 │   ├── Proveedor.java               # Proveedor
+│   ├── PurchaseOrder.java           # Orden de compra (enum Status)
+│   ├── PurchaseOrderLine.java       # Línea de orden de compra (composite PK)
 │   ├── Stock.java                   # Stock (1:1 con Product)
+│   ├── SupplierRating.java          # Valoración de proveedor
 │   └── User.java                    # Usuario
 ├── repository/
+│   ├── LocationRepository.java
 │   ├── PickOrderLineRepository.java
 │   ├── PickOrderRepository.java
 │   ├── ProductRepository.java
 │   ├── ProveedorRepository.java
+│   ├── PurchaseOrderLineRepository.java
+│   ├── PurchaseOrderRepository.java
 │   ├── StockRepository.java
+│   ├── SupplierRatingRepository.java
 │   └── UserRepository.java
-├── service/
-│   ├── PickOrderService.java
-│   ├── ProductService.java
-│   ├── ProveedorService.java
-│   └── UserService.java
-└── util/
-    └── Validations.java             # (vacía — placeholder)
+└── service/
+    ├── LocationService.java
+    ├── PickOrderService.java
+    ├── ProductService.java
+    ├── ProveedorService.java
+    ├── PurchaseOrderService.java
+    ├── SupplierRatingService.java
+    └── UserService.java
 ```
 
 ## Entidades
 
 | Entidad | Tabla | Descripción |
 |---------|-------|-------------|
+| **Location** | `ubicacion` | Ubicaciones del almacén. Solo tiene nombre (`name` → `nombre_ubicacion`). |
 | **User** | `usuario` | Usuarios del sistema (nombre, apellido, CUIL, rol, contraseña hasheada con BCrypt). Rol por defecto: `OPERARIO`. |
 | **Product** | `producto` | Productos del almacén. Tiene código de barras (interno o de fábrica), descripción y relación con un proveedor. |
 | **Proveedor** | `proveedor` | Proveedores de productos (CUIT, razón social, teléfono, mail, dirección). |
 | **Stock** | `stock` | Stock de cada producto. Relación 1:1 con Product (comparten PK). Tiene cantidad disponible y cantidad pendiente. |
 | **PickOrder** | `orden_retiro` | Orden de retiro de productos. Asociada a un usuario por `id_usuario` y compuesta por una o más líneas. |
 | **PickOrderLine** | `linea_retiro` | Línea de una orden de retiro. PK compuesta: `id_orden_retiro` + `id_producto`. Cantidad a retirar. |
+| **PurchaseOrder** | `orden_compra` | Orden de compra a un proveedor. Tiene estado (`PENDIENTE`/`RECIBIDA`/`CANCELADA`), fecha/hora y una o más líneas. |
+| **PurchaseOrderLine** | `linea_compra` | Línea de una orden de compra. PK compuesta: `id_orden_compra` + `id_producto`. Cantidad. |
+| **SupplierRating** | `valoracion_proveedor` | Valoración de un proveedor (tiempo de entrega, forma de entrega, relación precio/calidad). Asociada a un proveedor por `id_supplier` (raw Long). |
 
 ## API REST
 
@@ -262,6 +286,28 @@ Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 | `PUT` | `/api/proveedores/{id}` | Actualizar proveedor | `{ "cuit", "razonSocial", "telefono"?, "mail"?, "direccion"? }` |
 | `DELETE` | `/api/proveedores/{id}` | Eliminar proveedor | — |
 
+### Ubicaciones
+
+| Método | Ruta | Descripción | Body |
+|--------|------|-------------|------|
+| `POST` | `/api/ubicaciones` | Crear ubicación | `{ "name" }` |
+| `GET` | `/api/ubicaciones` | Listar todas las ubicaciones | — |
+| `GET` | `/api/ubicaciones/{id}` | Buscar ubicación por ID | — |
+| `PUT` | `/api/ubicaciones/{id}` | Actualizar ubicación | `{ "name" }` |
+| `DELETE` | `/api/ubicaciones/{id}` | Eliminar ubicación | — |
+
+### Valoraciones de Proveedor
+
+| Método | Ruta | Descripción | Body |
+|--------|------|-------------|------|
+| `POST` | `/api/valoraciones-proveedor` | Crear valoración | `{ "idSupplier", "deliveryTime"?, "deliveryMethod"?, "priceQualityRatio"? }` |
+| `GET` | `/api/valoraciones-proveedor` | Listar todas las valoraciones (filtrable por `?idSupplier=`) | — |
+| `GET` | `/api/valoraciones-proveedor/{id}` | Buscar valoración por ID | — |
+| `PUT` | `/api/valoraciones-proveedor/{id}` | Actualizar valoración | `{ "idSupplier", "deliveryTime"?, "deliveryMethod"?, "priceQualityRatio"? }` |
+| `DELETE` | `/api/valoraciones-proveedor/{id}` | Eliminar valoración | — |
+
+> La fecha/hora (`dateTime`) se asigna automáticamente al crear y al actualizar. El proveedor debe existir al crear. Al actualizar **no se cambia el proveedor** de la valoración (el campo `idSupplier` del body se ignora en `PUT`); solo se actualizan `deliveryTime`, `deliveryMethod` y `priceQualityRatio`.
+
 ### Órdenes de Retiro
 
 | Método | Ruta | Descripción | Body |
@@ -274,6 +320,19 @@ Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 
 > Al crear/actualizar una orden de retiro, el stock se ajusta automáticamente: se resta de `cantidadDisponible` y se suma a `cantidadPendiente`. Al eliminar, se revierte el ajuste.
 
+### Órdenes de Compra
+
+| Método | Ruta | Descripción | Body |
+|--------|------|-------------|------|
+| `POST` | `/api/ordenes-compra` | Crear orden de compra | `{ "idSupplier", "lines": [{ "idProduct", "amount" }] }` |
+| `GET` | `/api/ordenes-compra` | Listar órdenes (resumen, sin líneas) | — |
+| `GET` | `/api/ordenes-compra/{id}` | Buscar orden por ID (con líneas) | — |
+| `PUT` | `/api/ordenes-compra/{id}` | Actualizar orden | `{ "idSupplier", "lines": [{ "idProduct", "amount" }] }` |
+| `PUT` | `/api/ordenes-compra/{id}/recibir` | Marcar orden como recibida (suma al stock disponible) | — |
+| `DELETE` | `/api/ordenes-compra/{id}` | Eliminar orden (revierte stock si ya fue recibida) | — |
+
+> Al **recibir** una orden de compra, cada línea suma su cantidad a `cantidadDisponible` del producto. Si se actualiza una orden ya recibida, se revierte el ajuste de las líneas viejas y se aplica el de las nuevas; al eliminar una recibida, se revierte el stock. El estado inicial es `PENDIENTE`.
+
 ## Validaciones
 
 Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retornan 400 Bad Request con los mensajes en español:
@@ -281,7 +340,10 @@ Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retor
 - **Usuario**: nombre y apellido (3-150 chars), CUIL (formato XX-XXXXXXXX-X), contraseña (mínimo 8 chars, al menos una mayúscula y un dígito)
 - **Producto**: nombre (3-150 chars), descripción (3-500 chars), código de barras (máx 50 chars, opcional), proveedor requerido, origen (`FABRICANTE` o `INTERNO`), cantidades ≥ 0
 - **Proveedor**: CUIT (formato XX-XXXXXXXX-X), razón social (3-150 chars), email válido (si se provee)
+- **Ubicación**: nombre (3-100 chars, no vacío)
 - **Orden de retiro**: usuario requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
+- **Orden de compra**: proveedor requerido, líneas requeridas (mínimo 1), cantidad por línea ≥ 1
+- **Valoración de proveedor**: proveedor requerido, tiempo de entrega ≥ 0, forma de entrega y relación precio/calidad (máx 100 chars, opcionales)
 
 ## Issues conocidos
 

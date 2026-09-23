@@ -3,6 +3,7 @@ package big_three.wms.controller;
 import big_three.wms.config.SecurityConfig;
 import big_three.wms.dto.ProductResponseDTO;
 import big_three.wms.dto.StockResponseDTO;
+import big_three.wms.service.BarcodeService;
 import big_three.wms.service.ProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class ProductControllerTest {
 
     @MockitoBean
     private ProductService productService;
+
+    @MockitoBean
+    private BarcodeService barcodeService;
 
     @MockitoBean
     private UserDetailsService userDetailsService;
@@ -159,5 +163,26 @@ class ProductControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cantidadDisponible").value(9));
+    }
+
+    @Test
+    void getBarcode_returns200Png() throws Exception {
+        byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        when(barcodeService.getBarcodePng(1L)).thenReturn(png);
+
+        mockMvc.perform(get("/api/productos/1/barcode"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(content().bytes(png));
+    }
+
+    @Test
+    void getBarcode_productNotFound_returns500WithError() throws Exception {
+        when(barcodeService.getBarcodePng(1L))
+                .thenThrow(new RuntimeException("Producto no encontrado"));
+
+        mockMvc.perform(get("/api/productos/1/barcode"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("Producto no encontrado"));
     }
 }
