@@ -40,10 +40,10 @@ public class PhysicalMovementService {
         if (dto.getIdLocationFrom() != null) {
             Long idLocationFrom = dto.getIdLocationFrom();
             locationRepository.findById(idLocationFrom)
-                    .orElseThrow(() -> new IllegalArgumentException("Ubicación no encontrada"));
+                    .orElseThrow(() -> new IllegalArgumentException("Ubicación de origen no encontrada"));
         }
         locationRepository.findById(dto.getIdLocationTo())
-                .orElseThrow(() -> new IllegalArgumentException("Ubicación no encontrada"));
+                .orElseThrow(() -> new IllegalArgumentException("Ubicación de destino no encontrada"));
         userRepository.findById(dto.getIdUser())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 

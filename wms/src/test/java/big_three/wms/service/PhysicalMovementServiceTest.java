@@ -90,7 +90,7 @@ class PhysicalMovementServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
-        assertEquals("Product not found", ex.getMessage());
+        assertEquals("Producto no encontrado", ex.getMessage());
         verify(movementRepository, never()).save(any());
     }
 
@@ -101,7 +101,7 @@ class PhysicalMovementServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
-        assertEquals("Source location not found", ex.getMessage());
+        assertEquals("Ubicación de origen no encontrada", ex.getMessage());
         verify(movementRepository, never()).save(any());
     }
 
@@ -128,7 +128,7 @@ class PhysicalMovementServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
-        assertEquals("Destination location not found", ex.getMessage());
+        assertEquals("Ubicación de destino no encontrada", ex.getMessage());
         verify(movementRepository, never()).save(any());
     }
 
@@ -141,7 +141,7 @@ class PhysicalMovementServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
-        assertEquals("User not found", ex.getMessage());
+        assertEquals("Usuario no encontrado", ex.getMessage());
         verify(movementRepository, never()).save(any());
     }
 
@@ -197,6 +197,6 @@ class PhysicalMovementServiceTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> movementService.findByDateTimeRange(from, null));
 
-        assertEquals("Both 'from' and 'to' are required for date range filtering", ex.getMessage());
+        assertEquals("Se requieren tanto fecha de inicio como de fin", ex.getMessage());
     }
 }
