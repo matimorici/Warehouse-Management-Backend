@@ -2,6 +2,7 @@ package big_three.wms.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -27,7 +28,16 @@ public class SecurityConfig {
                         .sessionFixation(fixation -> fixation.changeSessionId())
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/usuarios", "/api/auth/login", "/api/proveedores/**", "/api/productos/**", "/api/ordenes-retiro/**", "/api/ordenes-compra/**", "/api/ubicaciones/**", "/api/valoraciones-proveedor/**", "/api/movimientos-fisicos/**").permitAll() //lista de endpoints permitidos, modificar; placeholders hasta implementar Sessions (ver TODO: seguridad delegada)
+                        .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/usuarios/**").hasRole("ADMINISTRADOR")
+                        .requestMatchers("/api/productos/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers("/api/ordenes-retiro/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers("/api/ordenes-compra/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers("/api/ubicaciones/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers("/api/valoraciones-proveedor/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers("/api/movimientos-fisicos/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers(HttpMethod.GET, "/api/proveedores/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
+                        .requestMatchers("/api/proveedores/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated() // pide auth para todos los endpoints que no estén arriba
                 );
         return http.build();
