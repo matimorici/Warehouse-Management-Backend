@@ -260,7 +260,18 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 - El sistema tiene protección CSRF habilitada: todo `POST`/`PUT`/`DELETE`, incluido `/api/auth/login`, requiere el token CSRF. El backend lo entrega en la cookie `XSRF-TOKEN`; el cliente debe reenviarlo en el header `X-XSRF-TOKEN`. En Angular, esto se logra con `HttpClientXsrfModule` (usando los nombres de cookie/header por default) y `withCredentials: true` en el `HttpClient`.
 - Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 
-> **Nota:** la autorización por rol sobre el resto de los endpoints (qué rutas requieren qué rol) todavía no está implementada — ver `TODO.md`, sección de seguridad.
+**Autorización por rol:**
+
+| Ruta | Acceso |
+|------|--------|
+| `POST /api/auth/login` | Público |
+| `/api/usuarios/**` | Solo `ADMINISTRADOR` |
+| `GET /api/proveedores/**` | `OPERARIO` o `ADMINISTRADOR` |
+| `POST`/`PUT`/`DELETE /api/proveedores/**` | Solo `ADMINISTRADOR` |
+| Productos, órdenes de retiro y de compra, ubicaciones, valoraciones de proveedor, movimientos físicos | `OPERARIO` o `ADMINISTRADOR` |
+| Cualquier otra ruta | Requiere estar autenticado |
+
+Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requerido también recibe `403`.
 
 ### Productos
 
