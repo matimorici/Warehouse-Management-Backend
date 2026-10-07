@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -42,6 +43,7 @@ class UserControllerTest {
         when(userService.create(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/usuarios")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -53,6 +55,7 @@ class UserControllerTest {
     @Test
     void create_invalidCuil_returns400() throws Exception {
         mockMvc.perform(post("/api/usuarios")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre": "Juan", "apellido": "Perez", "cuil": "abc", "contrasena": "Password1"}
@@ -63,6 +66,7 @@ class UserControllerTest {
     @Test
     void create_weakPassword_returns400() throws Exception {
         mockMvc.perform(post("/api/usuarios")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre": "Juan", "apellido": "Perez", "cuil": "20-12345678-9", "contrasena": "short"}

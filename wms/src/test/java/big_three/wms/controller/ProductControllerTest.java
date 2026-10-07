@@ -20,6 +20,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -54,6 +55,7 @@ class ProductControllerTest {
         when(productService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/productos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -64,6 +66,7 @@ class ProductControllerTest {
     @Test
     void create_invalidOrigen_returns400() throws Exception {
         mockMvc.perform(post("/api/productos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombreProducto": "Producto", "descripcionProducto": "Desc",
@@ -75,6 +78,7 @@ class ProductControllerTest {
     @Test
     void create_negativeStock_returns400() throws Exception {
         mockMvc.perform(post("/api/productos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombreProducto": "Producto", "descripcionProducto": "Desc",
@@ -89,6 +93,7 @@ class ProductControllerTest {
                 .thenThrow(new IllegalArgumentException("Ya existe un producto con ese código de barras: 779123"));
 
         mockMvc.perform(post("/api/productos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isBadRequest())
@@ -101,6 +106,7 @@ class ProductControllerTest {
                 .thenThrow(new RuntimeException("Proveedor no encontrado"));
 
         mockMvc.perform(post("/api/productos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isInternalServerError())
@@ -130,6 +136,7 @@ class ProductControllerTest {
         when(productService.update(eq(1L), any())).thenReturn(response());
 
         mockMvc.perform(put("/api/productos/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
@@ -137,7 +144,8 @@ class ProductControllerTest {
 
     @Test
     void delete_returns204() throws Exception {
-        mockMvc.perform(delete("/api/productos/1"))
+        mockMvc.perform(delete("/api/productos/1")
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 
@@ -157,6 +165,7 @@ class ProductControllerTest {
                 .thenReturn(new StockResponseDTO(1L, LocalDateTime.now(), 9, 0));
 
         mockMvc.perform(put("/api/productos/1/stock")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cantidadDisponible": 9}

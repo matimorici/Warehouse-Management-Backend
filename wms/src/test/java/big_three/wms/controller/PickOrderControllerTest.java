@@ -19,6 +19,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -49,6 +50,7 @@ class PickOrderControllerTest {
         when(pickOrderService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/ordenes-retiro")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -59,6 +61,7 @@ class PickOrderControllerTest {
     @Test
     void create_zeroCantidad_returns400() throws Exception {
         mockMvc.perform(post("/api/ordenes-retiro")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idUsuario": 1, "lineasRetiro": [{"idProducto": 1, "cantidad": 0}]}
@@ -69,6 +72,7 @@ class PickOrderControllerTest {
     @Test
     void create_missingLineas_returns400() throws Exception {
         mockMvc.perform(post("/api/ordenes-retiro")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idUsuario": 1}
@@ -79,6 +83,7 @@ class PickOrderControllerTest {
     @Test
     void create_emptyLineas_returns400() throws Exception {
         mockMvc.perform(post("/api/ordenes-retiro")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idUsuario": 1, "lineasRetiro": []}
@@ -109,6 +114,7 @@ class PickOrderControllerTest {
         when(pickOrderService.update(eq(10L), any())).thenReturn(response());
 
         mockMvc.perform(put("/api/ordenes-retiro/10")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
@@ -116,7 +122,8 @@ class PickOrderControllerTest {
 
     @Test
     void delete_returns204() throws Exception {
-        mockMvc.perform(delete("/api/ordenes-retiro/10"))
+        mockMvc.perform(delete("/api/ordenes-retiro/10")
+                .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 }
