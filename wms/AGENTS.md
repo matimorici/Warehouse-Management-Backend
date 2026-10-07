@@ -35,15 +35,17 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 `POST /api/auth/login` (`AuthController`) authenticates via `AuthenticationManager.authenticate(...)`, stores the result in the `SecurityContext`, and persists it to the `HttpSession` via `HttpSessionSecurityContextRepository` — this is what generates the `JSESSIONID` cookie. `UserService.login()` still runs afterward to build the response DTO; the CUIL/password check now effectively happens twice (once via `AuthenticationManager`, once inside `UserService.login`) — known duplication, not yet cleaned up (see `TODO.md`).
 `POST /api/auth/logout` invalidates the session via `SecurityContextLogoutHandler`. Not in `permitAll()` — requires an authenticated request. Unauthenticated requests get `403`, consistent with the rest of the app's default Spring Security behavior (no `httpBasic()`/`formLogin()` configured).
 
-Current `permitAll()` list (single-path matchers, **exact paths only — no trailing `/**`**):
+Authorization rules in `filterChain` (`authorizeHttpRequests`, evaluated top to bottom, first match wins; `anyRequest().authenticated()` is last):
 
-- `POST /api/usuarios` and `GET /api/usuarios` → `permitAll`
-- `POST /api/auth/login`, `/api/proveedores/**`, `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**`, `/api/valoraciones-proveedor/**`, `/api/movimientos-fisicos/**` → `permitAll`
-- Everything else → `anyRequest().authenticated()`, including:
-  - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
+- `/api/auth/login` → `permitAll`
+- `/api/usuarios/**` → `hasRole("ADMINISTRADOR")`
+- `GET /api/proveedores/**` → `hasAnyRole("ADMINISTRADOR", "OPERARIO")`; any other method on `/api/proveedores/**` → `hasRole("ADMINISTRADOR")` (the `GET` rule must stay declared first)
+- `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**`, `/api/valoraciones-proveedor/**`, `/api/movimientos-fisicos/**` → `hasAnyRole("ADMINISTRADOR", "OPERARIO")`
+- Everything else → `anyRequest().authenticated()`
 
-Role-based authorization (which authenticated routes require which role) is not yet implemented — see `TODO.md`, security section, Fase 5. Any `@WebMvcTest` that also does `@Import(SecurityConfig.class)` needs a `@MockitoBean` of `UserDetailsService` (stubbed to return a valid `UserDetails`), or context loading fails — `authenticationProvider` requires a real `UserDetailsService` bean to construct, and `@WebMvcTest` doesn't scan `@Service` classes by default.
+A new controller's routes get no role rule by default: they only require authentication until a matcher is added above `anyRequest()`.
 
+Any `@WebMvcTest` that also does `@Import(SecurityConfig.class)` needs: a `@MockitoBean` of `UserDetailsService` (or context loading fails — `authenticationProvider` requires a real `UserDetailsService` bean and `@WebMvcTest` doesn't scan `@Service` classes), and `@WithMockUser(roles = "ADMINISTRADOR")` on the class unless the test needs an anonymous or `OPERARIO` request. Also check that `@WebMvcTest(...)` points at the controller the test class is named after.
 Any `@WebMvcTest` doing `POST`/`PUT`/`DELETE` needs `.with(csrf())` (import `org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf`) on the `mockMvc.perform(...)` call, or the request is rejected with `403` before reaching the controller.
 
 ## Project structure
