@@ -19,6 +19,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -49,6 +50,7 @@ class PurchaseOrderControllerTest {
         when(purchaseOrderService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/ordenes-compra")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -60,6 +62,7 @@ class PurchaseOrderControllerTest {
     @Test
     void create_missingLines_returns400() throws Exception {
         mockMvc.perform(post("/api/ordenes-compra")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idSupplier": 1}
@@ -70,6 +73,7 @@ class PurchaseOrderControllerTest {
     @Test
     void create_emptyLines_returns400() throws Exception {
         mockMvc.perform(post("/api/ordenes-compra")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idSupplier": 1, "lines": []}
@@ -80,6 +84,7 @@ class PurchaseOrderControllerTest {
     @Test
     void create_zeroAmount_returns400() throws Exception {
         mockMvc.perform(post("/api/ordenes-compra")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idSupplier": 1, "lines": [{"idProduct": 1, "amount": 0}]}
@@ -110,6 +115,7 @@ class PurchaseOrderControllerTest {
         when(purchaseOrderService.update(eq(10L), any())).thenReturn(response());
 
         mockMvc.perform(put("/api/ordenes-compra/10")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
@@ -119,13 +125,15 @@ class PurchaseOrderControllerTest {
     void receive_returns200() throws Exception {
         when(purchaseOrderService.receive(10L)).thenReturn(response());
 
-        mockMvc.perform(put("/api/ordenes-compra/10/recibir"))
+        mockMvc.perform(put("/api/ordenes-compra/10/recibir")
+                        .with(csrf()))
                 .andExpect(status().isOk());
     }
 
     @Test
     void delete_returns204() throws Exception {
-        mockMvc.perform(delete("/api/ordenes-compra/10"))
+        mockMvc.perform(delete("/api/ordenes-compra/10")
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 }

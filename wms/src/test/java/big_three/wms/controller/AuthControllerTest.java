@@ -22,6 +22,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 
 @WebMvcTest(AuthController.class)
 @Import(SecurityConfig.class)
@@ -59,6 +61,7 @@ class AuthControllerTest {
         when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
                 .andExpect(status().isOk())
@@ -71,6 +74,7 @@ class AuthControllerTest {
         when(userService.login(any())).thenThrow(new InvalidCredentialsException("CUIL o contraseña incorrectos"));
 
         mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
                 .andExpect(status().isUnauthorized())
@@ -80,6 +84,7 @@ class AuthControllerTest {
     @Test
     void logout_validCredentials_returns204() throws Exception {
         mockMvc.perform(post("/api/auth/logout")
+                        .with(csrf())
                         .with(user("20-12345678-9")))
                 .andExpect(status().isNoContent());
     }

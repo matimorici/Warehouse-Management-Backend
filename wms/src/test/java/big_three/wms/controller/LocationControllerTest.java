@@ -17,6 +17,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -47,6 +48,7 @@ class LocationControllerTest {
         when(locationService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/ubicaciones")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -56,6 +58,7 @@ class LocationControllerTest {
     @Test
     void create_blankName_returns400() throws Exception {
         mockMvc.perform(post("/api/ubicaciones")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": ""}
@@ -66,6 +69,7 @@ class LocationControllerTest {
     @Test
     void create_nameTooShort_returns400() throws Exception {
         mockMvc.perform(post("/api/ubicaciones")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "AB"}
@@ -96,6 +100,7 @@ class LocationControllerTest {
         when(locationService.update(eq(1L), any())).thenReturn(response());
 
         mockMvc.perform(put("/api/ubicaciones/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
@@ -103,7 +108,8 @@ class LocationControllerTest {
 
     @Test
     void delete_returns204() throws Exception {
-        mockMvc.perform(delete("/api/ubicaciones/1"))
+        mockMvc.perform(delete("/api/ubicaciones/1")
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 }

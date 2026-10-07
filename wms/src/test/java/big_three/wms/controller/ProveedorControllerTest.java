@@ -17,6 +17,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -47,6 +48,7 @@ class ProveedorControllerTest {
         when(proveedorService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/proveedores")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -57,6 +59,7 @@ class ProveedorControllerTest {
     @Test
     void create_invalidCuit_returns400() throws Exception {
         mockMvc.perform(post("/api/proveedores")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cuit": "abc", "razonSocial": "Razon Social"}
@@ -87,6 +90,7 @@ class ProveedorControllerTest {
         when(proveedorService.update(eq(1L), any())).thenReturn(response());
 
         mockMvc.perform(put("/api/proveedores/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
@@ -94,7 +98,8 @@ class ProveedorControllerTest {
 
     @Test
     void delete_returns204() throws Exception {
-        mockMvc.perform(delete("/api/proveedores/1"))
+        mockMvc.perform(delete("/api/proveedores/1")
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 }

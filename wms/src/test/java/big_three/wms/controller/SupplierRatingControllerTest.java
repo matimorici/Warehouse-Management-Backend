@@ -18,6 +18,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -50,6 +51,7 @@ class SupplierRatingControllerTest {
         when(ratingService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/valoraciones-proveedor")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -60,6 +62,7 @@ class SupplierRatingControllerTest {
     @Test
     void create_missingIdSupplier_returns400() throws Exception {
         mockMvc.perform(post("/api/valoraciones-proveedor")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"deliveryTime": 2}
@@ -70,6 +73,7 @@ class SupplierRatingControllerTest {
     @Test
     void create_negativeDeliveryTime_returns400() throws Exception {
         mockMvc.perform(post("/api/valoraciones-proveedor")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idSupplier": 1, "deliveryTime": -1}
@@ -109,6 +113,7 @@ class SupplierRatingControllerTest {
         when(ratingService.update(eq(1L), any())).thenReturn(response());
 
         mockMvc.perform(put("/api/valoraciones-proveedor/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
@@ -116,7 +121,8 @@ class SupplierRatingControllerTest {
 
     @Test
     void delete_returns204() throws Exception {
-        mockMvc.perform(delete("/api/valoraciones-proveedor/1"))
+        mockMvc.perform(delete("/api/valoraciones-proveedor/1")
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 }

@@ -30,7 +30,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 - `passwordEncoder` bean (`BCryptPasswordEncoder`).
 - `authenticationProvider` bean (`DaoAuthenticationProvider`), wired to `CustomUserDetailsService` (`big_three.wms.security`, looks up `User` by CUIL via `UserRepository`, maps to `UserDetails` with `ROLE_<enum name>` authority) and the `PasswordEncoder` above.
 - `authenticationManager` bean, obtained from `AuthenticationConfiguration`.
-- `filterChain`: CSRF still disabled (pending Fase 4). Session management configured with `sessionFixation().changeSessionId()` (session ID regenerated on login). Session timeout: `server.servlet.session.timeout=90m` (`application.properties`).
+- - `filterChain`: CSRF enabled via `CookieCsrfTokenRepository.withHttpOnlyFalse()` (token in `XSRF-TOKEN` cookie, readable by JS; client must echo it in the `X-XSRF-TOKEN` header for state-changing requests). Session management configured with `sessionFixation().changeSessionId()` (session ID regenerated on login). Session timeout: `server.servlet.session.timeout=90m` (`application.properties`).
 
 `POST /api/auth/login` (`AuthController`) authenticates via `AuthenticationManager.authenticate(...)`, stores the result in the `SecurityContext`, and persists it to the `HttpSession` via `HttpSessionSecurityContextRepository` — this is what generates the `JSESSIONID` cookie. `UserService.login()` still runs afterward to build the response DTO; the CUIL/password check now effectively happens twice (once via `AuthenticationManager`, once inside `UserService.login`) — known duplication, not yet cleaned up (see `TODO.md`).
 `POST /api/auth/logout` invalidates the session via `SecurityContextLogoutHandler`. Not in `permitAll()` — requires an authenticated request. Unauthenticated requests get `403`, consistent with the rest of the app's default Spring Security behavior (no `httpBasic()`/`formLogin()` configured).
@@ -43,6 +43,8 @@ Current `permitAll()` list (single-path matchers, **exact paths only — no trai
   - `GET /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`
 
 Role-based authorization (which authenticated routes require which role) is not yet implemented — see `TODO.md`, security section, Fase 5. Any `@WebMvcTest` that also does `@Import(SecurityConfig.class)` needs a `@MockitoBean` of `UserDetailsService` (stubbed to return a valid `UserDetails`), or context loading fails — `authenticationProvider` requires a real `UserDetailsService` bean to construct, and `@WebMvcTest` doesn't scan `@Service` classes by default.
+
+Any `@WebMvcTest` doing `POST`/`PUT`/`DELETE` needs `.with(csrf())` (import `org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf`) on the `mockMvc.perform(...)` call, or the request is rejected with `403` before reaching the controller.
 
 ## Project structure
 

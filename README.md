@@ -256,9 +256,9 @@ Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS 
 | `POST` | `/api/auth/login` | Login | `{ "cuil", "contrasena" }` |
 | `POST` | `/api/auth/logout` | Logout (requiere sesión activa) | — |
 
-El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
-
-Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
+- El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
+- El sistema tiene protección CSRF habilitada: todo `POST`/`PUT`/`DELETE`, incluido `/api/auth/login`, requiere el token CSRF. El backend lo entrega en la cookie `XSRF-TOKEN`; el cliente debe reenviarlo en el header `X-XSRF-TOKEN`. En Angular, esto se logra con `HttpClientXsrfModule` (usando los nombres de cookie/header por default) y `withCredentials: true` en el `HttpClient`.
+- Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 
 > **Nota:** la autorización por rol sobre el resto de los endpoints (qué rutas requieren qué rol) todavía no está implementada — ver `TODO.md`, sección de seguridad.
 

@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -46,6 +47,7 @@ class PhysicalMovementControllerTest {
         when(movementService.create(any())).thenReturn(response());
 
         mockMvc.perform(post("/api/movimientos-fisicos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isCreated())
@@ -57,6 +59,7 @@ class PhysicalMovementControllerTest {
     @Test
     void create_missingIdProduct_returns400() throws Exception {
         mockMvc.perform(post("/api/movimientos-fisicos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idLocationFrom": 10, "idLocationTo": 20, "idUser": 30}
@@ -67,6 +70,7 @@ class PhysicalMovementControllerTest {
     @Test
     void create_missingIdLocationTo_returns400() throws Exception {
         mockMvc.perform(post("/api/movimientos-fisicos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idProduct": 1, "idLocationFrom": 10, "idUser": 30}
@@ -77,6 +81,7 @@ class PhysicalMovementControllerTest {
     @Test
     void create_missingIdUser_returns400() throws Exception {
         mockMvc.perform(post("/api/movimientos-fisicos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idProduct": 1, "idLocationFrom": 10, "idLocationTo": 20}
@@ -89,6 +94,7 @@ class PhysicalMovementControllerTest {
         when(movementService.create(any())).thenThrow(new IllegalArgumentException("Product not found"));
 
         mockMvc.perform(post("/api/movimientos-fisicos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isBadRequest())

@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
 public class SecurityConfig {
@@ -21,7 +22,7 @@ public class SecurityConfig {
     @Bean // Autenticacion y autorización de la app
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable()) //desabilita protecciones, quitar el disable para implementar Sessions o Cookies
+                .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())) //Proteccion contra falsificación de petición entre sitios
                 .sessionManagement(session -> session
                         .sessionFixation(fixation -> fixation.changeSessionId())
                 )
