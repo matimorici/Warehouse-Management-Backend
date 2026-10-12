@@ -51,6 +51,8 @@ A new controller's routes get no role rule by default: they only require authent
 Any `@WebMvcTest` that also does `@Import(SecurityConfig.class)` needs: a `@MockitoBean` of `UserDetailsService` (or context loading fails — `authenticationProvider` requires a real `UserDetailsService` bean and `@WebMvcTest` doesn't scan `@Service` classes), and `@WithMockUser(roles = "ADMINISTRADOR")` on the class unless the test needs an anonymous or `OPERARIO` request. Also check that `@WebMvcTest(...)` points at the controller the test class is named after.
 Any `@WebMvcTest` doing `POST`/`PUT`/`DELETE` needs `.with(csrf())` (import `org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf`) on the `mockMvc.perform(...)` call, or the request is rejected with `403` before reaching the controller.
 
+Session cookie: `server.servlet.session.cookie.secure=true` and `http-only=true` are set in `application.properties` (secure by default). Developers override `secure=false` in their git-ignored `application-local.properties` for local HTTP. Never set `secure=false` in `application.properties`. Guarded by `CookieSecurityPropertiesTest`.
+
 ## Project structure
 
 ```
