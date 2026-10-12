@@ -63,7 +63,10 @@ Editá `application-local.properties` con las credenciales reales de tu PostgreS
 ```properties
 DB_USERNAME=postgres
 DB_PASSWORD=tu_contraseña
+server.servlet.session.cookie.secure=false
 ```
+
+> La cookie de sesión es `Secure` por defecto (solo viaja por HTTPS). La línea `server.servlet.session.cookie.secure=false` es solo para desarrollo local por HTTP. **No la pongas en producción.**
 
 > Este archivo está en `.gitignore` — nunca se sube al repositorio. Cada integrante del equipo crea el suyo con sus propias credenciales locales.
 
