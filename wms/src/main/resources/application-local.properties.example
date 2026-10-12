@@ -1,2 +1,6 @@
 # DB_USERNAME= nombre_de_usuario
 # DB_PASSWORD= contraseña
+
+# Solo desarrollo local (HTTP): desactiva el flag Secure de la cookie de sesion.
+# Sin esta linea, en un navegador que no trate localhost como excepcion, el login por HTTP puede no persistir.
+server.servlet.session.cookie.secure=false
