@@ -237,7 +237,7 @@ wms/src/main/java/big_three/wms/
 
 ## API REST
 
-Todas las rutas están bajo el prefijo `/api/`. Los controladores permiten CORS desde `http://localhost:4200` (Angular).
+Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma global en `SecurityConfig`: permite el origen definido en la propiedad `app.cors.allowed-origin` (`http://localhost:4200` por defecto, para Angular) e incluye credenciales, necesarias para la sesión y el token CSRF. Para un deploy, cambiá esa propiedad al dominio real del frontend.
 
 ### Usuarios
 

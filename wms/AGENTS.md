@@ -20,7 +20,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 - **Package**: `big_three.wms`, entrypoint `WmsApplication.java` (port 8080).
 - **DB**: PostgreSQL `wms_db` on `localhost:5432`, user `postgres`, password `12345` (hardcoded in `application.properties`). **Schema is owned by Flyway** (`org.flywaydb:flyway-core` + `flyway-database-postgresql`): migrations live in `src/main/resources/db/migration/` and run automatically at startup, before Hibernate. Current chain: `V1__create_schema.sql` (full schema incl. `codigo_interno_seq` and tables with no JPA entity yet — reserved for planned features), `V2__ensure_codigo_interno_seq.sql` (repair for old baselined DBs missing the sequence — no-op on fresh DBs), `V3__seed_admin_user.sql` (default admin: CUIL `20-00000000-1`, password `Admin1234`, rol `ADMINISTRADOR`). `spring.flyway.baseline-on-migrate=true` — existing dev DBs (created with the old `wms_schema.sql`) are baseline-marked as V1 on first boot, no data loss; fresh DBs build from scratch. The old script survives read-only at `src/main/resources/db/wms_schema.sql` as historical reference only. `ddl-auto=validate` only verifies entities match the migrated schema. `show-sql=true`, `open-in-view=false`.
 - **No test profile / H2 override** — `@SpringBootTest` hits real PostgreSQL. `h2`/`mysql-connector-j` were removed from `pom.xml` (PostgreSQL only); only `postgresql` runtime driver remains.
-- **Frontend CORS**: `http://localhost:4200` (Angular), set per-controller via `@CrossOrigin`.
+- **Frontend CORS**: configured globally in `SecurityConfig` (`corsConfigurationSource`), allowed origin from `app.cors.allowed-origin` in `application.properties`, credentials enabled. Do not add `@CrossOrigin` to controllers.
 - **Libraries**: ZXing 3.5.3 (`core` + `javase`) used by `BarcodeService` to render product barcodes (`GET /api/productos/{id}/barcode`). Lombok excluded from final artifact by `spring-boot-maven-plugin`.
 - `wms/doc/` contains generated Javadoc — ignore it.
 
@@ -117,7 +117,7 @@ wms/src/main/java/big_three/wms/
 
 ## API endpoints
 
-All controllers have `@CrossOrigin(origins = "http://localhost:4200")`. All routes under `/api/`. Validation failures return 400 with Spanish messages.
+CORS is global (see `SecurityConfig`), not per controller. All routes under `/api/`. Validation failures return 400 with Spanish messages.
 
 ### Usuarios — `UserController`
 
@@ -258,7 +258,6 @@ Append-only feature: there is no `PUT` (update) or `DELETE`, and no `GET /{id}` 
 - DTO/entity mapping done manually (no MapStruct).
 - `@Data`, `@NoArgsConstructor`, `@AllArgsConstructor` from Lombok on entities.
 - Spanish messages in validation annotations.
-- `@CrossOrigin(origins = "http://localhost:4200")` on each controller class.
 - Jakarta Bean Validation on DTOs (`@NotBlank`, `@NotNull`, `@Size`, `@Pattern`, `@Min`, `@Email`, `@Valid`).
 - DB tables use snake_case; Java fields use camelCase.
 - PKs use `GenerationType.IDENTITY` (except `Stock`, which shares Product's PK).

@@ -12,7 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/ordenes-retiro")
-@CrossOrigin(origins = "http://localhost:4200")
+
 public class PickOrderController {
 
     private final PickOrderService pickOrderService;

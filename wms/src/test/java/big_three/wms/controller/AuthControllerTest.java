@@ -22,6 +22,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -165,5 +166,24 @@ class AuthControllerTest {
                 .andExpect(status().isOk());
 
         verify(loginAttemptService).recordSuccess("20-12345678-9");
+    }
+
+    @Test
+    void preflight_login_allowsCredentialsFromFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/auth/login")
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type,x-xsrf-token"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
+    void preflight_protectedRoute_isNotBlockedBySecurity() throws Exception {
+        mockMvc.perform(options("/api/productos")
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isOk());
     }
 }
