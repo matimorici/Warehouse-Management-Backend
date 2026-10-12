@@ -14,7 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/movimientos-fisicos")
-@CrossOrigin(origins = "http://localhost:4200")
+
 public class PhysicalMovementController {
     private final PhysicalMovementService movementService;
 

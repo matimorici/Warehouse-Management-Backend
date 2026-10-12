@@ -12,7 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/valoraciones-proveedor")
-@CrossOrigin(origins = "http://localhost:4200")
+
 public class SupplierRatingController {
     private final SupplierRatingService ratingService;
     public SupplierRatingController(SupplierRatingService ratingService) {
