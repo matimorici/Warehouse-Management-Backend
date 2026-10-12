@@ -20,7 +20,7 @@ Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordad
 6. [X] **Autorización por rol**: reemplazar el `permitAll()` masivo actual de `SecurityConfig` por reglas `hasRole('ADMINISTRADOR')` / `hasAnyRole('OPERARIO','ADMINISTRADOR')` según la tabla de rutas de la Fase 0. Cerrar con `anyRequest().authenticated()` al final, para que cualquier endpoint nuevo que se agregue después quede protegido por default.
 7. [ ] **Endurecimiento adicional** (independientes entre sí, se pueden hacer en cualquier orden o en paralelo con el punto 8):
     - [X] Rate limiting / bloqueo tras intentos fallidos de login (prioridad alta de este grupo — es el único que tapa un agujero real, no solo prolijidad).
-    - [ ] Revisar headers de seguridad HTTP que Spring Security ya deja activos por default.
+    - [X] Revisar headers de seguridad HTTP que Spring Security ya deja activos por default.
     - [X] Cookie `Secure` en `JSESSIONID` — **NO activar directo en `application.properties`**, va controlado por `Spring Profiles` (`application-dev.properties` = `false`, `application-prod.properties` = `true`), porque en `http://localhost` rompe el login si se activa a mano.
     - [X] Centralizar CORS (sacar `` hardcodeado de cada controller, mover a config global leyendo el origen desde `application.properties`/env var).
     - [ ] Logging de eventos de seguridad (login OK/fallido, logout, accesos rechazados).

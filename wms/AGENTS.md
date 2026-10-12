@@ -53,6 +53,8 @@ Any `@WebMvcTest` doing `POST`/`PUT`/`DELETE` needs `.with(csrf())` (import `org
 
 Session cookie: `server.servlet.session.cookie.secure=true` and `http-only=true` are set in `application.properties` (secure by default). Developers override `secure=false` in their git-ignored `application-local.properties` for local HTTP. Never set `secure=false` in `application.properties`. Guarded by `CookieSecurityPropertiesTest`.
 
+Security headers are Spring Security defaults (`nosniff`, `X-Frame-Options: DENY`, no-cache `Cache-Control`, HSTS only on HTTPS requests), not configured explicitly in `SecurityConfig`. `SecurityHeadersTest` asserts them, so disabling one by accident fails the suite.
+
 ## Project structure
 
 ```
