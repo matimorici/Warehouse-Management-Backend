@@ -2,6 +2,7 @@ package big_three.wms.security;
 
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -17,16 +18,27 @@ public class LoginAttemptService {
 
     private final Map<String, Attempt> attempts = new ConcurrentHashMap<>();
 
+    private final Clock clock;
+
+    public LoginAttemptService() {
+        this(Clock.systemUTC());
+    }
+
+    LoginAttemptService(Clock clock) {
+        this.clock = clock;
+    }
+
     public boolean isBlocked(String cuil) {
         Attempt attempt = attempts.get(cuil);
-        return attempt != null && attempt.lockedUntil() != null && attempt.lockedUntil().isAfter(Instant.now());
+        return attempt != null && attempt.lockedUntil() != null && attempt.lockedUntil().isAfter(clock.instant());
     }
 
     public void recordFailure(String cuil) {
         attempts.compute(cuil, (clave, actual) -> {
-            int previos = actual == null ? 0 : actual.lockedUntil() != null && actual.lockedUntil().isBefore(Instant.now()) ? 0 : actual.failures();
+            Instant now = clock.instant();
+            int previos = actual == null ? 0 : actual.lockedUntil() != null && !actual.lockedUntil().isAfter(now) ? 0 : actual.failures();
             int nuevosFallos = previos + 1;
-            Instant lockedUntil = actual == null ? null : nuevosFallos < MAX_ATTEMPTS ? null : Instant.now().plus(LOCK_DURATION);
+            Instant lockedUntil = nuevosFallos < MAX_ATTEMPTS ? null : now.plus(LOCK_DURATION);
             return new Attempt(nuevosFallos, lockedUntil);
         });
     }
