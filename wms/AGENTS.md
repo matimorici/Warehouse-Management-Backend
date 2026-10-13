@@ -55,6 +55,8 @@ Session cookie: `server.servlet.session.cookie.secure=true` and `http-only=true`
 
 Security headers are Spring Security defaults (`nosniff`, `X-Frame-Options: DENY`, no-cache `Cache-Control`, HSTS only on HTTPS requests), not configured explicitly in `SecurityConfig`. `SecurityHeadersTest` asserts them, so disabling one by accident fails the suite.
 
+Security events are logged with SLF4J: `AuthController` (login ok/failed/blocked, logout) and `LoggingAccessDeniedHandler` (registered in `filterChain`; denied access and CSRF rejections, then delegates to the default `AccessDeniedHandlerImpl` so the `403` response is unchanged). Never log passwords, session IDs or tokens. The login CUIL is user-controlled text (`LoginRequestDTO` only checks `@NotBlank`), so it goes through `safeCuil(...)` before being logged, to prevent log injection. Tests use `OutputCaptureExtension`.
+
 ## Project structure
 
 ```

@@ -18,6 +18,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -27,9 +30,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 
 @WebMvcTest(AuthController.class)
+@ExtendWith(OutputCaptureExtension.class)
 @Import(SecurityConfig.class)
 class AuthControllerTest {
 
@@ -185,5 +192,43 @@ class AuthControllerTest {
                         .header("Origin", "http://localhost:4200")
                         .header("Access-Control-Request-Method", "POST"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void login_invalidPassword_logsFailureWithoutPassword(CapturedOutput output) throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_INVALID_PASSWORD))
+                .andExpect(status().isUnauthorized());
+
+        assertTrue(output.getAll().contains("Login fallido: cuil=20-12345678-9"));
+        assertFalse(output.getAll().contains("Password2"));
+    }
+
+    @Test
+    void login_cuilWithLineBreak_isNotWrittenToLog(CapturedOutput output) throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"cuil": "20-12345678-9\\nLOG-FALSO", "contrasena": "Password1"}
+                            """))
+                .andExpect(status().isUnauthorized());
+
+        assertFalse(output.getAll().contains("LOG-FALSO"));
+    }
+
+    @Test
+    void login_validCredentials_logsSuccess(CapturedOutput output) throws Exception {
+        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_VALID_CREDENTIALS))
+                .andExpect(status().isOk());
+
+        assertTrue(output.getAll().contains("Login exitoso: cuil=20-12345678-9"));
     }
 }
