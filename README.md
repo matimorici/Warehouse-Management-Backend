@@ -263,6 +263,7 @@ Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma globa
 - El sistema tiene protección CSRF habilitada: todo `POST`/`PUT`/`DELETE`, incluido `/api/auth/login`, requiere el token CSRF. El backend lo entrega en la cookie `XSRF-TOKEN`; el cliente debe reenviarlo en el header `X-XSRF-TOKEN`. El cliente debe pedir primero cualquier endpoint (el backend responde con la cookie) y luego copiar su valor al header en cada `POST`/`PUT`/`DELETE`, además de enviar las cookies (`withCredentials: true` en Angular). Atención: el interceptor `HttpClientXsrfModule` de Angular solo actúa sobre URLs relativas; con URL absoluta hace falta un proxy de desarrollo o un interceptor propio.
 - Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 - Tras 5 intentos fallidos de login para un mismo CUIL, el login se bloquea por 15 minutos y responde `429`. Un login exitoso reinicia el contador. El contador vive en memoria: se reinicia si el backend se reinicia.
+- Los eventos de seguridad (login exitoso o fallido, bloqueos, logout y accesos denegados) se registran en el log con el CUIL y la IP de origen. Nunca se registran contraseñas ni tokens.
 
 **Autorización por rol:**
 
