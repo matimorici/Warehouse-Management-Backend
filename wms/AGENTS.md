@@ -57,7 +57,7 @@ Security headers are Spring Security defaults (`nosniff`, `X-Frame-Options: DENY
 
 Security events are logged with SLF4J: `AuthController` (login ok/failed/blocked, logout) and `LoggingAccessDeniedHandler` (registered in `filterChain`; denied access and CSRF rejections, then delegates to the default `AccessDeniedHandlerImpl` so the `403` response is unchanged). Never log passwords, session IDs or tokens. The login CUIL is user-controlled text (`LoginRequestDTO` only checks `@NotBlank`), so it goes through `safeCuil(...)` before being logged, to prevent log injection. Tests use `OutputCaptureExtension`.
 
-Authorization rules are covered by `RoleAuthorizationTest`, a parameterized table of (method, path, role, allowed). Whenever a route is added or a rule in `SecurityConfig` changes, add or update rows there. Non-GET cases must keep `.with(csrf())`, or denied cases would pass because of the missing CSRF token instead of the role rule. A denied case expects exactly `403`; an allowed case only expects "not 403".
+Authorization rules are covered by `RoleAuthorizationTest`, a parameterized table of (method, path, role, allowed). Whenever a route is added or a rule in `SecurityConfig` changes, add or update rows there. Non-GET cases must keep `.with(csrf())`, or denied cases would pass because of the missing CSRF token instead of the role rule. A denied case expects exactly `403`; an allowed case only expects "not 403".  `SessionFlowTest` covers the end-to-end login → session → logout sequence.
 
 ## Project structure
 
