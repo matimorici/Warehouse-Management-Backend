@@ -2,6 +2,7 @@ package big_three.wms.config;
 
 import big_three.wms.security.CsrfCookieFilter;
 import big_three.wms.security.SpaCsrfTokenRequestHandler;
+import big_three.wms.security.LoggingAccessDeniedHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -52,7 +53,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/proveedores/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
                         .requestMatchers("/api/proveedores/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated() // pide auth para todos los endpoints que no estén arriba
-                );
+                )
+                .exceptionHandling(ex -> ex.accessDeniedHandler(new LoggingAccessDeniedHandler()));
         return http.build();
     }
     @Bean

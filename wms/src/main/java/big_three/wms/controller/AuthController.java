@@ -19,11 +19,22 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/api/auth")
 
 public class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
+    private static final Pattern CUIL_FORMAT = Pattern.compile("\\d{2}-\\d{8}-\\d");
+
+    private static String safeCuil(String cuil) {
+        return cuil != null && CUIL_FORMAT.matcher(cuil).matches() ? cuil : "<formato invalido>";
+    }
 
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
@@ -38,6 +49,7 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<UserResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto, HttpServletRequest request, HttpServletResponse response) {
         if (loginAttemptService.isBlocked(dto.getCuil())){
+            log.warn("Login bloqueado por intentos fallidos: cuil={} ip={}", safeCuil(dto.getCuil()), request.getRemoteAddr());
             throw new TooManyAttemptsException("Demasiados intentos fallidos");
         }
         Authentication authRequest = new UsernamePasswordAuthenticationToken(dto.getCuil(), dto.getContrasena());
@@ -46,6 +58,7 @@ public class AuthController {
             authResult = authenticationManager.authenticate(authRequest);
         }catch(AuthenticationException authException) {
             loginAttemptService.recordFailure(dto.getCuil());
+            log.warn("Login fallido: cuil={} ip={}", safeCuil(dto.getCuil()), request.getRemoteAddr());
             throw new InvalidCredentialsException("CUIL o contraseña incorrectos");
         }
         loginAttemptService.recordSuccess(dto.getCuil());
@@ -54,12 +67,14 @@ public class AuthController {
         HttpSessionSecurityContextRepository sessionSecurity = new HttpSessionSecurityContextRepository();
         sessionSecurity.saveContext(context, request, response);
         UserResponseDTO responseDTO = userService.login(dto);
+        log.info("Login exitoso: cuil={} ip={}", safeCuil(dto.getCuil()), request.getRemoteAddr());
         return ResponseEntity.ok(responseDTO);
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
         SecurityContextLogoutHandler logoutHandler = new SecurityContextLogoutHandler();
+        log.info("Logout: cuil={} ip={}", authentication.getName(), request.getRemoteAddr());
         logoutHandler.logout(request, response, null);
         return ResponseEntity.noContent().build();
     }
