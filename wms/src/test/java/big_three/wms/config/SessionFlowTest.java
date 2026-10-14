@@ -62,7 +62,7 @@ class SessionFlowTest {
                 .roles("OPERARIO")
                 .build();
         when(userDetailsService.loadUserByUsername("20-12345678-9")).thenReturn(userDetails);
-        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
+        when(userService.findByCuil(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
     }
 
     @Test

@@ -85,39 +85,20 @@ class UserServiceTest {
     }
 
     @Test
-    void login_validCredentials_returnsUserDto() {
-        LoginRequestDTO dto = new LoginRequestDTO();
-        dto.setCuil("20-12345678-9");
-        dto.setContrasena("Password1");
-        when(userRepository.findByCuil(dto.getCuil())).thenReturn(Optional.of(user(1L, dto.getCuil(), "hash")));
-        when(passwordEncoder.matches(dto.getContrasena(), "hash")).thenReturn(true);
+    void findByCuil_existingUser_returnsUserDto() {
+        when(userRepository.findByCuil("20-12345678-9")).thenReturn(Optional.of(user(1L, "20-12345678-9", "hash")));
 
-        UserResponseDTO response = userService.login(dto);
+        UserResponseDTO response = userService.findByCuil("20-12345678-9");
 
         assertEquals(1L, response.getIdUsuario());
-        assertEquals(dto.getCuil(), response.getCuil());
+        assertEquals("20-12345678-9", response.getCuil());
     }
 
     @Test
-    void login_wrongPassword_throwsInvalidCredentials() {
-        LoginRequestDTO dto = new LoginRequestDTO();
-        dto.setCuil("20-12345678-9");
-        dto.setContrasena("WrongPass1");
-        when(userRepository.findByCuil(dto.getCuil())).thenReturn(Optional.of(user(1L, dto.getCuil(), "hash")));
-        when(passwordEncoder.matches(dto.getContrasena(), "hash")).thenReturn(false);
+    void findByCuil_unknownCuil_throwsInvalidCredentials() {
+        when(userRepository.findByCuil("20-12345678-9")).thenReturn(Optional.empty());
 
-        assertThrows(InvalidCredentialsException.class, () -> userService.login(dto));
-    }
-
-    @Test
-    void login_unknownCuil_throwsInvalidCredentials() {
-        LoginRequestDTO dto = new LoginRequestDTO();
-        dto.setCuil("20-12345678-9");
-        dto.setContrasena("Password1");
-        when(userRepository.findByCuil(dto.getCuil())).thenReturn(Optional.empty());
-
-        assertThrows(InvalidCredentialsException.class, () -> userService.login(dto));
-        verify(passwordEncoder, never()).matches(any(), any());
+        assertThrows(InvalidCredentialsException.class, () -> userService.findByCuil("20-12345678-9"));
     }
 
     @Test

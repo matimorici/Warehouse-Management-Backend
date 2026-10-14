@@ -80,7 +80,7 @@ class AuthControllerTest {
 
     @Test
     void login_validCredentials_returns200() throws Exception {
-        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
+        when(userService.findByCuil(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
@@ -92,8 +92,8 @@ class AuthControllerTest {
     }
 
     @Test
-    void login_invalidCredentials_returns401WithError() throws Exception {
-        when(userService.login(any())).thenThrow(new InvalidCredentialsException("CUIL o contraseña incorrectos"));
+    void login_userDeletedAfterAuthentication_returns401WithError() throws Exception {
+        when(userService.findByCuil(any())).thenThrow(new InvalidCredentialsException("CUIL o contraseña incorrectos"));
 
         mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
@@ -164,7 +164,7 @@ class AuthControllerTest {
 
     @Test
     void login_validCredentials_clearsAttempts() throws Exception {
-        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
+        when(userService.findByCuil(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
@@ -221,7 +221,7 @@ class AuthControllerTest {
 
     @Test
     void login_validCredentials_logsSuccess(CapturedOutput output) throws Exception {
-        when(userService.login(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
+        when(userService.findByCuil(any())).thenReturn(new UserResponseDTO(1L, "Juan", "Perez", "20-12345678-9", Role.OPERARIO));
 
         mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
