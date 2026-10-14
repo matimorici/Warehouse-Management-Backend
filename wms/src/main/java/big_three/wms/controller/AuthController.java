@@ -66,7 +66,7 @@ public class AuthController {
         context.setAuthentication(authResult);
         HttpSessionSecurityContextRepository sessionSecurity = new HttpSessionSecurityContextRepository();
         sessionSecurity.saveContext(context, request, response);
-        UserResponseDTO responseDTO = userService.login(dto);
+        UserResponseDTO responseDTO = userService.findByCuil(dto.getCuil());
         log.info("Login exitoso: cuil={} ip={}", safeCuil(dto.getCuil()), request.getRemoteAddr());
         return ResponseEntity.ok(responseDTO);
     }

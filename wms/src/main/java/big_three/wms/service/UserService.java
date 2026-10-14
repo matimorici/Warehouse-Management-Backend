@@ -3,7 +3,6 @@ package big_three.wms.service;
 import big_three.wms.model.User;
 import big_three.wms.dto.UserCreateDTO;
 import big_three.wms.dto.UserResponseDTO;
-import big_three.wms.dto.LoginRequestDTO;
 import big_three.wms.exception.InvalidCredentialsException;
 import big_three.wms.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,14 +36,9 @@ public class UserService {
         return convertToResponseDTO(savedUser);
     }
 
-    public UserResponseDTO login(LoginRequestDTO dto) {
-        User u = userRepository.findByCuil(dto.getCuil())
+    public UserResponseDTO findByCuil(String cuil) {
+        User u = userRepository.findByCuil(cuil)
                 .orElseThrow(() -> new InvalidCredentialsException("CUIL o contraseña incorrectos"));
-
-        if (!passwordEncoder.matches(dto.getContrasena(), u.getContrasena())) {
-            throw new InvalidCredentialsException("CUIL o contraseña incorrectos");
-        }
-
         return convertToResponseDTO(u);
     }
 
