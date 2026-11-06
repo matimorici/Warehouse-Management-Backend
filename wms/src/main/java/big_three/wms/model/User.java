@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "usuario")
 @Data
@@ -32,4 +34,7 @@ public class User {
 
 	    @Column(nullable = false, length = 255)
 		private String contrasena;
+
+		@Column(name = "fecha_baja")
+		private LocalDateTime fechaBaja;
 }
