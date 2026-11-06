@@ -23,6 +23,7 @@ Thumbs.db
 *.iml
 *.ipr
 .idea/
+/.idea/
 *.iml
 
 ### Eclipse ###
