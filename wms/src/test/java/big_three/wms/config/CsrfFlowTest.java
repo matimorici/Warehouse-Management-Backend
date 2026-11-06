@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,6 +29,9 @@ class CsrfFlowTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private FilterChainProxy springSecurityFilterChain;
+
     @MockitoBean
     private ProductService productService;
 
@@ -39,6 +43,9 @@ class CsrfFlowTest {
 
     @Test
     void firstGet_issuesXsrfCookie() throws Exception {
+        System.out.println("Security filter chains: " + springSecurityFilterChain.getFilterChains().stream()
+                .map(chain -> chain.getFilters().stream().map(filter -> filter.getClass().getName()).toList())
+                .toList());
         mockMvc.perform(get("/api/productos"))
                 .andDo(print())
                 .andExpect(cookie().exists("XSRF-TOKEN"));
