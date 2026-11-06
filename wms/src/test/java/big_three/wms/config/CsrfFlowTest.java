@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 
 @WebMvcTest(ProductController.class)
 @Import(SecurityConfig.class)
@@ -39,6 +40,7 @@ class CsrfFlowTest {
     @Test
     void firstGet_issuesXsrfCookie() throws Exception {
         mockMvc.perform(get("/api/productos"))
+                .andDo(print())
                 .andExpect(cookie().exists("XSRF-TOKEN"));
     }
 
