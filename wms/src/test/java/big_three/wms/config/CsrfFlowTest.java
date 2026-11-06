@@ -9,10 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.web.FilterChainProxy;
-import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -21,7 +18,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 
 @WebMvcTest(ProductController.class)
 @Import(SecurityConfig.class)
@@ -30,9 +26,6 @@ class CsrfFlowTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private FilterChainProxy springSecurityFilterChain;
 
     @MockitoBean
     private ProductService productService;
@@ -45,14 +38,7 @@ class CsrfFlowTest {
 
     @Test
     void firstGet_issuesXsrfCookie() throws Exception {
-        System.out.println("Security filter chains: " + springSecurityFilterChain.getFilterChains().stream()
-                .map(chain -> chain.getFilters().stream().map(filter -> filter.getClass().getName()
-                        + (filter instanceof CsrfFilter ? " tokenRepository="
-                        + ReflectionTestUtils.getField(filter, "tokenRepository").getClass().getName() : ""))
-                        .toList())
-                .toList());
         mockMvc.perform(get("/api/productos"))
-                .andDo(print())
                 .andExpect(cookie().exists("XSRF-TOKEN"));
     }
 
