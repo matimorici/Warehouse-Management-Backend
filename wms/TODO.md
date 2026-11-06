@@ -60,6 +60,17 @@ Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordad
 8. **No auth flow / tests** (AGENTS.md bugs #9, #10, #12). The kept `WmsApplicationTests.contextLoads()` still hits real PostgreSQL — running the full `./mvnw test` requires a live DB, while the new service/controller tests are DB-free. Swap `contextLoads()` to Testcontainers `@ServiceConnection` (Docker is available) or a test profile so the whole suite runs without local PG.
 9. **Hardcoded DB credentials** in `application.properties` (user `postgres` / password `12345`). Move to env vars / placeholders (`${DB_USERNAME}`) so the repo is safe to share and CI can configure its own.
 
+## Admin dashboards and reports (planned)
+
+Build read-only reporting endpoints for the admin UI from the existing product, stock, order, supplier-rating, physical-movement, and user data. Keep reports aggregate-oriented, filterable by date where applicable, and avoid exposing passwords, password hashes, or unnecessary personal data. Agree on date boundaries/time zone and pagination for detail reports before implementing them.
+
+1. [ ] **Inventory overview**: total active products, total available and pending units, products out of stock, and configurable low-stock list (threshold supplied by the caller or configured centrally). Include product identifiers/names and current quantities; allow sorting and pagination for the low-stock list.
+2. [ ] **Order operations report**: pick and purchase order counts by status and date range, quantities by product, and aging pending orders. Make clear that canceled/received states and timestamps follow the existing order model; support date filtering and paginated order details.
+3. [ ] **Stock movement report**: units received, picked, and physically relocated over a date range, with product and location breakdowns where the recorded data supports them. Distinguish order-driven stock adjustments from `PhysicalMovement` records rather than implying they are one complete ledger.
+4. [ ] **Supplier performance report**: ratings per supplier (delivery time, delivery method, price/quality), rating count and averages, plus purchase-order activity. Handle missing ratings as “no data,” not as a zero score.
+5. [ ] **Admin summary endpoint and access rules**: provide a compact dashboard summary and separate report endpoints as needed; restrict all admin-only summaries/reports to `ADMINISTRADOR`, update `SecurityConfig` and `RoleAuthorizationTest`, and document response fields, filters, and calculation definitions in README.
+6. [ ] **Report verification**: cover date boundaries, empty datasets, aggregates against known fixtures, pagination/sorting, and admin-vs-operario authorization once the reporting endpoints are implemented.
+
 ## Low priority / cleanup
 
 10. [X] **Unused repository methods**: `UserRepository.findByRol`, `ProductRepository.findByCodigoBarras`, `PickOrderLineRepository.findByIdProducto`, `PickOrderRepository.findByIdUsuario` — no callers. Remove or implement features that use them.
