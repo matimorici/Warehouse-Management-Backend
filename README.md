@@ -119,8 +119,9 @@ El schema no se mantiene a mano: lo gobierna **Flyway**, una herramienta de migr
 | V1 | `V1__create_schema.sql` | Crea todo el schema (tablas, índices, constraints, `codigo_interno_seq`). Incluye tablas del dominio que todavía no tienen entidad JPA. |
 | V2 | `V2__ensure_codigo_interno_seq.sql` | Reparación: garantiza que `codigo_interno_seq` exista en bases viejas baselineadas como V1 (armadas antes de que la secuencia existiera). No-op en bases nuevas. |
 | V3 | `V3__seed_admin_user.sql` | Inserta el usuario administrador por defecto. |
+| V4 | `V4__agregar_fecha_baja_usuario.sql` | Agrega `usuario.fecha_baja` (NULL = activo) y el índice parcial `idx_usuario_activos`. Habilita la baja lógica sin perder trazabilidad. |
 
-> **Usuario administrador por defecto (seed V3):** CUIL `20-00000000-1`, contraseña `Admin1234`, rol `ADMINISTRADOR`. Existe en todas las bases (nuevas o baselineadas) tras arrancar la app. Se puede loguear con `POST /api/auth/login` o eliminar/modificar si se prefiere.
+> **Usuario administrador por defecto (seed V3):** CUIL `20-00000000-1`, contraseña `Admin1234`, rol `ADMINISTRADOR`. Existe en todas las bases (nuevas o baselineadas) tras arrancar la app. Se puede loguear con `POST /api/auth/login` o desactivar/modificar si se prefiere.
 
 #### Verificar la reparación V2 (importante, una vez por equipo)
 
@@ -246,11 +247,13 @@ Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma globa
 
 | Método | Ruta | Descripción | Body |
 |--------|------|-------------|------|
-| `POST` | `/api/usuarios` | Crear usuario | `{ "nombre", "apellido", "cuil", "contrasena" }` |
+| `POST` | `/api/usuarios` | Crear usuario | `{ "nombre", "apellido", "cuil", "contrasena", "rol" }` (`rol` opcional; por defecto `OPERARIO`) |
 | `POST` | `/api/usuarios/login` | Login | `{ "cuil", "contrasena" }` |
-| `GET` | `/api/usuarios` | Listar todos los usuarios | — |
-| `GET` | `/api/usuarios/{id}` | Buscar usuario por ID | — |
-| `DELETE` | `/api/usuarios/{id}` | Eliminar usuario | — |
+| `GET` | `/api/usuarios` | Listar usuarios activos | — |
+| `GET` | `/api/usuarios/{id}` | Buscar usuario activo por ID | — |
+| `DELETE` | `/api/usuarios/{id}` | Desactivar usuario (baja lógica) | — |
+
+> **Baja lógica:** `DELETE /api/usuarios/{id}` no borra la fila. Setea `usuario.fecha_baja` con la fecha/hora actual; los listados y búsquedas por ID solo devuelven usuarios con `fecha_baja IS NULL`, y el login rechaza usuarios dados de baja. Esto preserva la trazabilidad de `orden_retiro` y `movimiento_fisico`, que referencian al usuario.
 
 ### Autenticación
 
@@ -260,6 +263,7 @@ Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma globa
 | `POST` | `/api/auth/logout` | Logout (requiere sesión activa) | — |
 
 - El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
+- Los usuarios dados de baja (`fecha_baja` no nulo) no pueden autenticarse: `CustomUserDetailsService` solo busca usuarios activos.
 - El sistema tiene protección CSRF habilitada: todo `POST`/`PUT`/`DELETE`, incluido `/api/auth/login`, requiere el token CSRF. El backend lo entrega en la cookie `XSRF-TOKEN`; el cliente debe reenviarlo en el header `X-XSRF-TOKEN`. El cliente debe pedir primero cualquier endpoint (el backend responde con la cookie) y luego copiar su valor al header en cada `POST`/`PUT`/`DELETE`, además de enviar las cookies (`withCredentials: true` en Angular). Atención: el interceptor `HttpClientXsrfModule` de Angular solo actúa sobre URLs relativas; con URL absoluta hace falta un proxy de desarrollo o un interceptor propio.
 - Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 - Tras 5 intentos fallidos de login para un mismo CUIL, el login se bloquea por 15 minutos y responde `429`. Un login exitoso reinicia el contador. El contador vive en memoria: se reinicia si el backend se reinicia.

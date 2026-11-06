@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,4 +16,9 @@ public class UserResponseDTO {
     private String apellido;
     private String cuil;
     private Role rol;
+    private LocalDateTime fechaBaja;
+
+    public UserResponseDTO(Long idUsuario, String nombre, String apellido, String cuil, Role rol) {
+        this(idUsuario, nombre, apellido, cuil, rol, null);
+    }
 }

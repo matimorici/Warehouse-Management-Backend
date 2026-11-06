@@ -16,7 +16,7 @@ public class CustomUserDetailsService implements UserDetailsService{
     }
 
     public UserDetails loadUserByUsername(String username) {
-        User u = userRepository.findByCuil(username)
+        User u = userRepository.findByCuilAndFechaBajaIsNull(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Cuil inexistente"));
 
         UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()

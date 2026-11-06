@@ -1,5 +1,6 @@
 package big_three.wms.dto;
 
+import big_three.wms.model.Role;
 import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -25,5 +26,5 @@ public class UserCreateDTO {
         @Pattern(regexp = "^(?=.*[A-Z])(?=.*[0-9]).{8,}$", message = "La contraseña debe tener al menos 8 caracteres, una mayúscula y un número")
         private String contrasena;
 
-
+        private Role rol;
 }
