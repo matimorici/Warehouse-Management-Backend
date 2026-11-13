@@ -76,6 +76,8 @@ wms/src/main/java/big_three/wms/
 └── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, ReportPeriod, ReportService, SupplierRatingService, PhysicalMovementService, BarcodeService
 ```
 
+Conteos actuales: 11 entidades, 10 controllers, 23 DTOs de API + 10 DTOs de reportes, 12 repositorios y 11 archivos en `service/` (10 services + `ReportPeriod`).
+
 ## Entities (11)
 
 | Entity | Table | PK | Key relationships |
@@ -245,7 +247,7 @@ Módulo de solo lectura para el rol `ADMINISTRADOR`, bajo `/api/reportes` (regla
 - `controller/ReportController`: `@RequestMapping("/api/reportes")`, solo `GET`.
 - `service/ReportService`: resuelve defaults y validaciones manuales (`IllegalArgumentException` → 400); mapea proyecciones nativas a DTOs.
 - `repository/ReportRepository`: extiende `org.springframework.data.repository.Repository<Product, Long>` (no tiene entidad propia). Todas las lecturas son `@Query`; una sola interfaz para todos los prompts de reportes.
-- `dto/report/`: `StockBajoDTO`, `StockPorProveedorDTO`, `ProductoUbicacionActualDTO`, `UbicacionOcupacionDTO`, `ProductoMasRetiradoDTO`, `ProductoSinRotacionDTO`, `RetiroPorPeriodoDTO`, `ActividadOperarioDTO`. Nombres de rutas, parámetros y campos en español.
+- `dto/report/`: `StockBajoDTO`, `StockPorProveedorDTO`, `ProductoUbicacionActualDTO`, `UbicacionOcupacionDTO`, `ProductoMasRetiradoDTO`, `ProductoSinRotacionDTO`, `RetiroPorPeriodoDTO`, `ActividadOperarioDTO`, `OrdenCompraResumenDTO`, `ProveedorRankingDTO`. Nombres de rutas, parámetros y campos en español.
 - `service/ReportPeriod`: record compartido `ReportPeriod(LocalDateTime from, LocalDateTime toExclusive)` con factory `of(LocalDate from, LocalDate to)`. `from` null → `1970-01-01T00:00`; `to` null → `9999-01-01T00:00` (exclusivo); si no, `from.atStartOfDay()` y `to.plusDays(1).atStartOfDay()`; `from > to` → `IllegalArgumentException("La fecha 'from' no puede ser posterior a 'to'")`. Centraliza la resolución para que las queries nunca reciban `null`.
 
 Convenciones de consultas (aplican a este y a los próximos prompts de reportes):
@@ -264,7 +266,7 @@ Convenciones de consultas (aplican a este y a los próximos prompts de reportes)
 Criterio de bajas lógicas:
 
 - **Reportes de estado actual** (`stock-bajo`, `stock-por-proveedor`, `productos/ubicacion-actual`, `ubicaciones/ocupacion`) excluyen productos, proveedores y ubicaciones con `fecha_baja` no nulo.
-- **Reportes históricos por período** (`productos/mas-retirados`, `productos/sin-rotacion`, `retiros/por-periodo`, `operarios/actividad`) excluyen las órdenes de retiro dadas de baja, pero incluyen productos y usuarios dados de baja cuando tuvieron actividad; esas filas llevan un campo booleano `activo` (`true` si `fecha_baja IS NULL`).
+- **Reportes históricos por período** (`productos/mas-retirados`, `productos/sin-rotacion`, `retiros/por-periodo`, `operarios/actividad`, `ordenes-compra/resumen`, `proveedores/ranking`) excluyen las órdenes de retiro y de compra dadas de baja, pero incluyen productos, usuarios y proveedores dados de baja cuando tuvieron actividad; esas filas llevan un campo booleano `activo` (`true` si `fecha_baja IS NULL`). Los proveedores activos aparecen siempre, aunque no tengan actividad; los dados de baja solo cuando la tuvieron en el período.
 
 Endpoints actuales:
 
@@ -276,6 +278,8 @@ Endpoints actuales:
 - `GET /api/reportes/productos/sin-rotacion?from&to&soloConStock=true`: productos activos sin retiros activos en el período; `soloConStock` default true y exige `cantidadDisponible > 0`; `ultimoRetiro` = `MAX` del último retiro activo del producto sin limitar por período. JPQL con `NOT EXISTS` y subconsulta. Orden: stock desc, nombre asc.
 - `GET /api/reportes/retiros/por-periodo?from&to&agrupacion=DIA`: serie temporal sobre órdenes de retiro activas. `agrupacion` se recibe como `String`, se valida en el service (`DIA`/`SEMANA`/`MES`, case-insensitive; inválida → `IllegalArgumentException("La agrupación debe ser DIA, SEMANA o MES")`) y se traduce a `day`/`week`/`month` para `date_trunc` nativo. `SEMANA` es ISO (lunes). Solo buckets con datos. Orden: período asc.
 - `GET /api/reportes/operarios/actividad?from&to`: todos los usuarios (sin actividad con ceros y dados de baja con `activo=false`). `cantidadRetiros`/`unidadesRetiradas` salen de un agregado de órdenes activas por usuario; `cantidadMovimientos` de un agregado de `movimiento_fisico`; `ultimaActividad` es el máximo entre ambos dentro del período. Se combinan en el service por `idUsuario` para evitar el producto cartesiano. Orden: `(cantidadRetiros + cantidadMovimientos)` desc, apellido, nombre. El DTO no incluye contraseña.
+- `GET /api/reportes/ordenes-compra/resumen?from&to`: una fila por proveedor activo más los proveedores dados de baja con órdenes en el período. El período filtra por `orden_compra.fecha_hora` y excluye órdenes con `fecha_baja`; `ordenesPendientes`/`ordenesRecibidas`/`ordenesCanceladas` usan `COUNT(DISTINCT o.id_orden_compra) FILTER (WHERE estado = ...)` para no multiplicar por las líneas; `unidadesPedidas` suma `linea_compra.cantidad` de `PENDIENTE`+`RECIBIDA` y `unidadesRecibidas` solo de `RECIBIDA`. Los proveedores sin órdenes aparecen con ceros. Orden: `unidadesPedidas` desc, `razonSocial`. `ordenesCanceladas` queda en 0 hasta que exista un endpoint de cancelación.
+- `GET /api/reportes/proveedores/ranking?from&to`: proveedores activos siempre; dados de baja solo si tuvieron valoraciones u órdenes recibidas en el período. `cantidadValoraciones`/`promedioTiempoEntregaValorado` filtran por `valoracion_proveedor.fecha_hora` (AVG ignora `NULL`); `ordenesRecibidas`/`promedioDiasRecepcion` filtran por `orden_compra.fecha_recepcion` dentro del período y excluyen órdenes dadas de baja; `promedioDiasRecepcion` = promedio de `(fecha_recepcion - fecha_hora)` en días, redondeado a 2 decimales; `recibidasSinFecha` cuenta órdenes `RECIBIDA` activas con `fecha_recepcion IS NULL` **sin filtro de período**. Tres agregados separados (proveedores, valoraciones, órdenes) se combinan por `idProveedor` en el service para evitar el producto cartesiano. Orden: `promedioDiasRecepcion` asc con nulls al final, `cantidadValoraciones` desc, `razonSocial`. `relacion_precio_calidad` es texto libre y no se agrega.
 
 Seguridad y tests:
 
@@ -283,7 +287,7 @@ Seguridad y tests:
 - `RoleAuthorizationTest` carga todos los controllers: cada nuevo controller necesita su `@MockitoBean` (hoy `ReportService`). Por cada endpoint nuevo se agregan tres filas: `ADMINISTRADOR→true`, `OPERARIO→false`, `ANONIMO→false`.
 - `ReportControllerTest` usa `@WebMvcTest(ReportController.class)`, `@Import(SecurityConfig.class)`, `@MockitoBean ReportService` y `UserDetailsService`, y `@WithMockUser(roles = "ADMINISTRADOR")`.
 - `ReportPeriodTest` cubre sin fechas, solo `from`, solo `to`, rango válido (el `to` queda exclusivo en el día siguiente) y `from > to`.
-- `ReportServiceTest` cubre el mapeo de cada reporte, los defaults y validaciones de `limit`/`agrupacion`, y la combinación de retiros/movimientos por `idUsuario` (usuario con retiros sin movimientos, con movimientos sin retiros, con ambos y sin actividad), incluido `activo`.
+- `ReportServiceTest` cubre el mapeo de cada reporte, los defaults y validaciones de `limit`/`agrupacion`, la combinación de retiros/movimientos por `idUsuario` (usuario con retiros sin movimientos, con movimientos sin retiros, con ambos y sin actividad), y la combinación de proveedores por `idProveedor` (solo valoraciones, solo órdenes, ambos, sin actividad), incluidos `activo`, nulls y redondeo de promedios.
 - Los mocks no validan las queries: al cambiar JPQL/SQL hay que arrancar la app con el perfil `local` (Hibernate valida los JPQL) y, si hay PostgreSQL, correr las queries nativas contra datos de prueba. Para los reportes históricos, los datos de prueba deben incluir una orden dada de baja, un producto dado de baja con retiros, un producto jamás retirado, un usuario sin actividad, un usuario dado de baja con actividad y órdenes en los bordes de día (23:59 del `to` incluido, 00:00 del día siguiente excluido).
 
 ## Error handling

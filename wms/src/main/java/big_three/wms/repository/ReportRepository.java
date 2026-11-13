@@ -203,6 +203,104 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    @Query(value = """
+            SELECT pr.id_proveedor AS "idProveedor",
+                   pr.razon_social AS "razonSocial",
+                   (pr.fecha_baja IS NULL) AS "activo",
+                   COUNT(DISTINCT o.id_orden_compra) FILTER (WHERE o.estado = 'PENDIENTE') AS "ordenesPendientes",
+                   COUNT(DISTINCT o.id_orden_compra) FILTER (WHERE o.estado = 'RECIBIDA') AS "ordenesRecibidas",
+                   COUNT(DISTINCT o.id_orden_compra) FILTER (WHERE o.estado = 'CANCELADA') AS "ordenesCanceladas",
+                   COALESCE(SUM(l.cantidad) FILTER (WHERE o.estado IN ('PENDIENTE', 'RECIBIDA')), 0) AS "unidadesPedidas",
+                   COALESCE(SUM(l.cantidad) FILTER (WHERE o.estado = 'RECIBIDA'), 0) AS "unidadesRecibidas"
+            FROM proveedor pr
+            LEFT JOIN orden_compra o
+                   ON o.id_proveedor = pr.id_proveedor
+                  AND o.fecha_baja IS NULL
+                  AND o.fecha_hora >= :from
+                  AND o.fecha_hora < :toExclusive
+            LEFT JOIN linea_compra l ON l.id_orden_compra = o.id_orden_compra
+            WHERE pr.fecha_baja IS NULL
+               OR EXISTS (
+                   SELECT 1
+                   FROM orden_compra o2
+                   WHERE o2.id_proveedor = pr.id_proveedor
+                     AND o2.fecha_baja IS NULL
+                     AND o2.fecha_hora >= :from
+                     AND o2.fecha_hora < :toExclusive
+               )
+            GROUP BY pr.id_proveedor, pr.razon_social, pr.fecha_baja
+            ORDER BY COALESCE(SUM(l.cantidad) FILTER (WHERE o.estado IN ('PENDIENTE', 'RECIBIDA')), 0) DESC,
+                     pr.razon_social ASC,
+                     pr.id_proveedor ASC
+            """, nativeQuery = true)
+    List<OrdenCompraResumenProjection> findOrdenesCompraResumen(
+            @Param("from") LocalDateTime from,
+            @Param("toExclusive") LocalDateTime toExclusive);
+
+    @Query(value = """
+            SELECT pr.id_proveedor AS "idProveedor",
+                   pr.razon_social AS "razonSocial",
+                   (pr.fecha_baja IS NULL) AS "activo"
+            FROM proveedor pr
+            WHERE pr.fecha_baja IS NULL
+               OR EXISTS (
+                   SELECT 1
+                   FROM valoracion_proveedor v
+                   WHERE v.id_proveedor = pr.id_proveedor
+                     AND v.fecha_hora >= :from
+                     AND v.fecha_hora < :toExclusive
+               )
+               OR EXISTS (
+                   SELECT 1
+                   FROM orden_compra o
+                   WHERE o.id_proveedor = pr.id_proveedor
+                     AND o.fecha_baja IS NULL
+                     AND o.estado = 'RECIBIDA'
+                     AND o.fecha_recepcion >= :from
+                     AND o.fecha_recepcion < :toExclusive
+               )
+            ORDER BY pr.id_proveedor ASC
+            """, nativeQuery = true)
+    List<ProveedorRankingBaseProjection> findProveedoresRankingBase(
+            @Param("from") LocalDateTime from,
+            @Param("toExclusive") LocalDateTime toExclusive);
+
+    @Query(value = """
+            SELECT v.id_proveedor AS "idProveedor",
+                   COUNT(*) AS "cantidadValoraciones",
+                   CAST(AVG(v.tiempo_entrega) AS double precision) AS "promedioTiempoEntregaValorado"
+            FROM valoracion_proveedor v
+            WHERE v.fecha_hora >= :from
+              AND v.fecha_hora < :toExclusive
+            GROUP BY v.id_proveedor
+            """, nativeQuery = true)
+    List<ValoracionesProveedorProjection> findValoracionesPorProveedor(
+            @Param("from") LocalDateTime from,
+            @Param("toExclusive") LocalDateTime toExclusive);
+
+    @Query(value = """
+            SELECT o.id_proveedor AS "idProveedor",
+                   COUNT(*) FILTER (
+                       WHERE o.fecha_recepcion >= :from
+                         AND o.fecha_recepcion < :toExclusive
+                   ) AS "ordenesRecibidas",
+                   CAST(AVG(EXTRACT(EPOCH FROM (o.fecha_recepcion - o.fecha_hora)) / 86400.0)
+                       FILTER (
+                           WHERE o.fecha_recepcion >= :from
+                             AND o.fecha_recepcion < :toExclusive
+                       ) AS double precision) AS "promedioDiasRecepcion",
+                   COUNT(*) FILTER (WHERE o.fecha_recepcion IS NULL) AS "recibidasSinFecha"
+            FROM orden_compra o
+            WHERE o.fecha_baja IS NULL
+              AND o.estado = 'RECIBIDA'
+              AND (o.fecha_recepcion IS NULL
+                   OR (o.fecha_recepcion >= :from AND o.fecha_recepcion < :toExclusive))
+            GROUP BY o.id_proveedor
+            """, nativeQuery = true)
+    List<OrdenesRecibidasProveedorProjection> findOrdenesRecibidasPorProveedor(
+            @Param("from") LocalDateTime from,
+            @Param("toExclusive") LocalDateTime toExclusive);
+
     interface ProductoUbicacionActualProjection {
         Long getIdProducto();
 
@@ -277,5 +375,49 @@ public interface ReportRepository extends Repository<Product, Long> {
         Long getCantidadMovimientos();
 
         LocalDateTime getUltimaActividad();
+    }
+
+    interface OrdenCompraResumenProjection {
+        Long getIdProveedor();
+
+        String getRazonSocial();
+
+        Boolean getActivo();
+
+        Long getOrdenesPendientes();
+
+        Long getOrdenesRecibidas();
+
+        Long getOrdenesCanceladas();
+
+        Long getUnidadesPedidas();
+
+        Long getUnidadesRecibidas();
+    }
+
+    interface ProveedorRankingBaseProjection {
+        Long getIdProveedor();
+
+        String getRazonSocial();
+
+        Boolean getActivo();
+    }
+
+    interface ValoracionesProveedorProjection {
+        Long getIdProveedor();
+
+        Long getCantidadValoraciones();
+
+        Double getPromedioTiempoEntregaValorado();
+    }
+
+    interface OrdenesRecibidasProveedorProjection {
+        Long getIdProveedor();
+
+        Long getOrdenesRecibidas();
+
+        Double getPromedioDiasRecepcion();
+
+        Long getRecibidasSinFecha();
     }
 }

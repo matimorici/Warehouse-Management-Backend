@@ -1,9 +1,11 @@
 package big_three.wms.service;
 
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
 import big_three.wms.dto.report.ProductoUbicacionActualDTO;
+import big_three.wms.dto.report.ProveedorRankingDTO;
 import big_three.wms.dto.report.RetiroPorPeriodoDTO;
 import big_three.wms.dto.report.StockBajoDTO;
 import big_three.wms.dto.report.StockPorProveedorDTO;
@@ -342,6 +344,187 @@ class ReportServiceTest {
         assertEquals(0L, sinActividad.getCantidadMovimientos());
         assertNull(sinActividad.getUltimaActividad());
         assertFalse(sinActividad.getActivo());
+    }
+
+    @Test
+    void findOrdenesCompraResumen_mapeaLaProyeccionYResuelveElPeriodo() {
+        ReportRepository.OrdenCompraResumenProjection fila =
+                mock(ReportRepository.OrdenCompraResumenProjection.class);
+        when(fila.getIdProveedor()).thenReturn(4L);
+        when(fila.getRazonSocial()).thenReturn("Proveedor Dado de Baja");
+        when(fila.getActivo()).thenReturn(false);
+        when(fila.getOrdenesPendientes()).thenReturn(2L);
+        when(fila.getOrdenesRecibidas()).thenReturn(3L);
+        when(fila.getOrdenesCanceladas()).thenReturn(1L);
+        when(fila.getUnidadesPedidas()).thenReturn(25L);
+        when(fila.getUnidadesRecibidas()).thenReturn(10L);
+        when(reportRepository.findOrdenesCompraResumen(
+                LocalDateTime.of(2026, 3, 10, 0, 0),
+                LocalDateTime.of(2026, 3, 13, 0, 0)))
+                .thenReturn(List.of(fila));
+
+        List<OrdenCompraResumenDTO> resultado = reportService.findOrdenesCompraResumen(
+                LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 12));
+
+        assertEquals(1, resultado.size());
+        OrdenCompraResumenDTO dto = resultado.get(0);
+        assertEquals(4L, dto.getIdProveedor());
+        assertEquals("Proveedor Dado de Baja", dto.getRazonSocial());
+        assertFalse(dto.getActivo());
+        assertEquals(2L, dto.getOrdenesPendientes());
+        assertEquals(3L, dto.getOrdenesRecibidas());
+        assertEquals(1L, dto.getOrdenesCanceladas());
+        assertEquals(25L, dto.getUnidadesPedidas());
+        assertEquals(10L, dto.getUnidadesRecibidas());
+    }
+
+    @Test
+    void findOrdenesCompraResumen_sinFechas_usaElPeriodoPorDefecto() {
+        when(reportRepository.findOrdenesCompraResumen(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0)))
+                .thenReturn(List.of());
+
+        assertTrue(reportService.findOrdenesCompraResumen(null, null).isEmpty());
+    }
+
+    @Test
+    void findProveedoresRanking_combinaValoracionesYOrdenesPorProveedor() {
+        ReportRepository.ProveedorRankingBaseProjection soloValoraciones =
+                proveedorRanking(1L, "Proveedor A", true);
+        ReportRepository.ProveedorRankingBaseProjection soloOrdenes =
+                proveedorRanking(2L, "Proveedor B", true);
+        ReportRepository.ProveedorRankingBaseProjection sinActividad =
+                proveedorRanking(3L, "Proveedor C", false);
+        ReportRepository.ProveedorRankingBaseProjection ambos =
+                proveedorRanking(4L, "Proveedor D", true);
+
+        ReportRepository.ValoracionesProveedorProjection valoraciones1 =
+                valoraciones(1L, 2L, 4.5);
+        ReportRepository.ValoracionesProveedorProjection valoraciones4 =
+                valoraciones(4L, 1L, 3.0);
+        ReportRepository.OrdenesRecibidasProveedorProjection ordenes2 =
+                ordenes(2L, 2L, 3.333333, 1L);
+        ReportRepository.OrdenesRecibidasProveedorProjection ordenes4 =
+                ordenes(4L, 1L, 1.236, 2L);
+
+        when(reportRepository.findProveedoresRankingBase(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0)))
+                .thenReturn(List.of(soloValoraciones, soloOrdenes, sinActividad, ambos));
+        when(reportRepository.findValoracionesPorProveedor(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0)))
+                .thenReturn(List.of(valoraciones1, valoraciones4));
+        when(reportRepository.findOrdenesRecibidasPorProveedor(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0)))
+                .thenReturn(List.of(ordenes2, ordenes4));
+
+        List<ProveedorRankingDTO> resultado = reportService.findProveedoresRanking(null, null);
+
+        assertEquals(List.of(4L, 2L, 1L, 3L),
+                resultado.stream().map(ProveedorRankingDTO::getIdProveedor).toList());
+
+        ProveedorRankingDTO ambosDto = resultado.get(0);
+        assertEquals("Proveedor D", ambosDto.getRazonSocial());
+        assertTrue(ambosDto.getActivo());
+        assertEquals(1L, ambosDto.getCantidadValoraciones());
+        assertEquals(3.0, ambosDto.getPromedioTiempoEntregaValorado());
+        assertEquals(1L, ambosDto.getOrdenesRecibidas());
+        assertEquals(1.24, ambosDto.getPromedioDiasRecepcion());
+        assertEquals(2L, ambosDto.getRecibidasSinFecha());
+
+        ProveedorRankingDTO soloOrdenesDto = resultado.get(1);
+        assertEquals(0L, soloOrdenesDto.getCantidadValoraciones());
+        assertNull(soloOrdenesDto.getPromedioTiempoEntregaValorado());
+        assertEquals(2L, soloOrdenesDto.getOrdenesRecibidas());
+        assertEquals(3.33, soloOrdenesDto.getPromedioDiasRecepcion());
+        assertEquals(1L, soloOrdenesDto.getRecibidasSinFecha());
+
+        ProveedorRankingDTO soloValoracionesDto = resultado.get(2);
+        assertEquals(2L, soloValoracionesDto.getCantidadValoraciones());
+        assertEquals(4.5, soloValoracionesDto.getPromedioTiempoEntregaValorado());
+        assertEquals(0L, soloValoracionesDto.getOrdenesRecibidas());
+        assertNull(soloValoracionesDto.getPromedioDiasRecepcion());
+        assertEquals(0L, soloValoracionesDto.getRecibidasSinFecha());
+
+        ProveedorRankingDTO sinActividadDto = resultado.get(3);
+        assertFalse(sinActividadDto.getActivo());
+        assertEquals(0L, sinActividadDto.getCantidadValoraciones());
+        assertNull(sinActividadDto.getPromedioTiempoEntregaValorado());
+        assertEquals(0L, sinActividadDto.getOrdenesRecibidas());
+        assertNull(sinActividadDto.getPromedioDiasRecepcion());
+        assertEquals(0L, sinActividadDto.getRecibidasSinFecha());
+    }
+
+    @Test
+    void findProveedoresRanking_ordenaPorDiasConNullsAlFinalYLuegoValoraciones() {
+        ReportRepository.ProveedorRankingBaseProjection proveedorA =
+                proveedorRanking(1L, "Proveedor A", true);
+        ReportRepository.ProveedorRankingBaseProjection proveedorB =
+                proveedorRanking(2L, "Proveedor B", true);
+        ReportRepository.ProveedorRankingBaseProjection proveedorC =
+                proveedorRanking(3L, "Proveedor C", true);
+
+        ReportRepository.ValoracionesProveedorProjection valoracionesA =
+                valoraciones(1L, 1L, 5.0);
+        ReportRepository.ValoracionesProveedorProjection valoracionesC =
+                valoraciones(3L, 3L, 2.0);
+        ReportRepository.OrdenesRecibidasProveedorProjection ordenesA =
+                ordenes(1L, 1L, 2.0, 0L);
+        ReportRepository.OrdenesRecibidasProveedorProjection ordenesB =
+                ordenes(2L, 1L, 1.0, 0L);
+
+        when(reportRepository.findProveedoresRankingBase(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 1, 2, 0, 0)))
+                .thenReturn(List.of(proveedorA, proveedorB, proveedorC));
+        when(reportRepository.findValoracionesPorProveedor(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 1, 2, 0, 0)))
+                .thenReturn(List.of(valoracionesA, valoracionesC));
+        when(reportRepository.findOrdenesRecibidasPorProveedor(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 1, 2, 0, 0)))
+                .thenReturn(List.of(ordenesA, ordenesB));
+
+        List<ProveedorRankingDTO> resultado = reportService.findProveedoresRanking(
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 1));
+
+        assertEquals(List.of(2L, 1L, 3L),
+                resultado.stream().map(ProveedorRankingDTO::getIdProveedor).toList());
+    }
+
+    private ReportRepository.ProveedorRankingBaseProjection proveedorRanking(
+            Long id, String razonSocial, boolean activo) {
+        ReportRepository.ProveedorRankingBaseProjection fila =
+                mock(ReportRepository.ProveedorRankingBaseProjection.class);
+        when(fila.getIdProveedor()).thenReturn(id);
+        when(fila.getRazonSocial()).thenReturn(razonSocial);
+        when(fila.getActivo()).thenReturn(activo);
+        return fila;
+    }
+
+    private ReportRepository.ValoracionesProveedorProjection valoraciones(
+            Long id, Long cantidadValoraciones, Double promedioTiempoEntregaValorado) {
+        ReportRepository.ValoracionesProveedorProjection fila =
+                mock(ReportRepository.ValoracionesProveedorProjection.class);
+        when(fila.getIdProveedor()).thenReturn(id);
+        when(fila.getCantidadValoraciones()).thenReturn(cantidadValoraciones);
+        when(fila.getPromedioTiempoEntregaValorado()).thenReturn(promedioTiempoEntregaValorado);
+        return fila;
+    }
+
+    private ReportRepository.OrdenesRecibidasProveedorProjection ordenes(
+            Long id, Long ordenesRecibidas, Double promedioDiasRecepcion, Long recibidasSinFecha) {
+        ReportRepository.OrdenesRecibidasProveedorProjection fila =
+                mock(ReportRepository.OrdenesRecibidasProveedorProjection.class);
+        when(fila.getIdProveedor()).thenReturn(id);
+        when(fila.getOrdenesRecibidas()).thenReturn(ordenesRecibidas);
+        when(fila.getPromedioDiasRecepcion()).thenReturn(promedioDiasRecepcion);
+        when(fila.getRecibidasSinFecha()).thenReturn(recibidasSinFecha);
+        return fila;
     }
 
     private ReportRepository.UsuarioActividadBaseProjection usuario(

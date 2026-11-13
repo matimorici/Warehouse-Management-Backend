@@ -1,9 +1,11 @@
 package big_three.wms.controller;
 
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
 import big_three.wms.dto.report.ProductoUbicacionActualDTO;
+import big_three.wms.dto.report.ProveedorRankingDTO;
 import big_three.wms.dto.report.RetiroPorPeriodoDTO;
 import big_three.wms.dto.report.StockBajoDTO;
 import big_three.wms.dto.report.StockPorProveedorDTO;
@@ -80,5 +82,19 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ResponseEntity.ok(reportService.findActividadOperarios(from, to));
+    }
+
+    @GetMapping("/ordenes-compra/resumen")
+    public ResponseEntity<List<OrdenCompraResumenDTO>> ordenesCompraResumen(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(reportService.findOrdenesCompraResumen(from, to));
+    }
+
+    @GetMapping("/proveedores/ranking")
+    public ResponseEntity<List<ProveedorRankingDTO>> proveedoresRanking(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(reportService.findProveedoresRanking(from, to));
     }
 }
