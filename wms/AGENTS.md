@@ -73,7 +73,7 @@ wms/src/main/java/big_three/wms/
 ├── exception/                 # InvalidCredentialsException + GlobalExceptionHandler
 ├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine, SupplierRating, PhysicalMovement
 ├── repository/                # Spring Data JPA repositories, including ReportRepository (Repository<Product, Long>)
-└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, ReportService, SupplierRatingService, PhysicalMovementService, BarcodeService
+└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, ReportPeriod, ReportService, SupplierRatingService, PhysicalMovementService, BarcodeService
 ```
 
 ## Entities (11)
@@ -245,7 +245,8 @@ Módulo de solo lectura para el rol `ADMINISTRADOR`, bajo `/api/reportes` (regla
 - `controller/ReportController`: `@RequestMapping("/api/reportes")`, solo `GET`.
 - `service/ReportService`: resuelve defaults y validaciones manuales (`IllegalArgumentException` → 400); mapea proyecciones nativas a DTOs.
 - `repository/ReportRepository`: extiende `org.springframework.data.repository.Repository<Product, Long>` (no tiene entidad propia). Todas las lecturas son `@Query`; una sola interfaz para todos los prompts de reportes.
-- `dto/report/`: `StockBajoDTO`, `StockPorProveedorDTO`, `ProductoUbicacionActualDTO`, `UbicacionOcupacionDTO`. Nombres de rutas, parámetros y campos en español.
+- `dto/report/`: `StockBajoDTO`, `StockPorProveedorDTO`, `ProductoUbicacionActualDTO`, `UbicacionOcupacionDTO`, `ProductoMasRetiradoDTO`, `ProductoSinRotacionDTO`, `RetiroPorPeriodoDTO`, `ActividadOperarioDTO`. Nombres de rutas, parámetros y campos en español.
+- `service/ReportPeriod`: record compartido `ReportPeriod(LocalDateTime from, LocalDateTime toExclusive)` con factory `of(LocalDate from, LocalDate to)`. `from` null → `1970-01-01T00:00`; `to` null → `9999-01-01T00:00` (exclusivo); si no, `from.atStartOfDay()` y `to.plusDays(1).atStartOfDay()`; `from > to` → `IllegalArgumentException("La fecha 'from' no puede ser posterior a 'to'")`. Centraliza la resolución para que las queries nunca reciban `null`.
 
 Convenciones de consultas (aplican a este y a los próximos prompts de reportes):
 
@@ -253,15 +254,17 @@ Convenciones de consultas (aplican a este y a los próximos prompts de reportes)
 - Preferir JPQL con constructor expression (`SELECT new big_three.wms.dto.report.X(...)`).
 - No existe asociación JPA `Product`↔`Stock`: usar entity joins (`LEFT JOIN Stock s ON s.idProducto = p.idProducto`).
 - `SUM(Integer)` devuelve `Long`; `AVG` devuelve `Double`. Usar `COALESCE` para que un producto sin fila de `stock` cuente como 0.
-- SQL nativo solo cuando haga falta (`LATERAL`, `DISTINCT ON`, `date_trunc`, `FILTER`). Las queries nativas devuelven proyecciones de interfaz (anidadas en `ReportRepository`) y `ReportService` las mapea a DTO.
+- SQL nativo solo cuando haga falta (`LATERAL`, `DISTINCT ON`, `date_trunc`, `FILTER`, CTEs). Las queries nativas devuelven proyecciones de interfaz (anidadas en `ReportRepository`) y `ReportService` las mapea a DTO.
 - En SQL nativo, alias entre comillas dobles (`AS "idProducto"`): PostgreSQL pasa a minúsculas los alias sin comillas.
-- Nunca pasar parámetros `null` a una query; los defaults se resuelven en `ReportService`. Usar parámetros no nulos (por ejemplo el booleano `soloSinUbicar`).
+- Nunca pasar parámetros `null` a una query; los defaults se resuelven en `ReportService` y en `ReportPeriod`. Usar parámetros no nulos (por ejemplo los booleanos `soloSinUbicar`/`soloConStock`).
 - Ordenamientos deterministas, siempre con desempate por nombre o id.
+- Los parámetros de período se filtran siempre con `fecha_hora >= :from AND fecha_hora < :toExclusive`; `to` es inclusivo a nivel de día porque `ReportPeriod` lo traduce al inicio del día siguiente.
+- Con `date_trunc` nativo, el valor de agrupación (`day`/`week`/`month`) sale de una lista blanca; nunca se pasa el texto del cliente. Agrupar/ordenar por el ordinal de la expresión (`GROUP BY 1`, `ORDER BY 1`) porque PostgreSQL no reconoce como iguales dos placeholders distintos con la misma expresión.
 
 Criterio de bajas lógicas:
 
-- **Reportes de estado actual** (los cuatro de este prompt) excluyen productos, proveedores y ubicaciones con `fecha_baja` no nulo.
-- **Reportes históricos por período** (próximos prompts) excluyen órdenes dadas de baja, pero incluyen productos, proveedores y usuarios dados de baja; esas filas llevan un campo booleano `activo`.
+- **Reportes de estado actual** (`stock-bajo`, `stock-por-proveedor`, `productos/ubicacion-actual`, `ubicaciones/ocupacion`) excluyen productos, proveedores y ubicaciones con `fecha_baja` no nulo.
+- **Reportes históricos por período** (`productos/mas-retirados`, `productos/sin-rotacion`, `retiros/por-periodo`, `operarios/actividad`) excluyen las órdenes de retiro dadas de baja, pero incluyen productos y usuarios dados de baja cuando tuvieron actividad; esas filas llevan un campo booleano `activo` (`true` si `fecha_baja IS NULL`).
 
 Endpoints actuales:
 
@@ -269,13 +272,19 @@ Endpoints actuales:
 - `GET /api/reportes/stock-por-proveedor`: todos los proveedores activos (también sin productos, con ceros), contando solo productos activos. El schema no tiene precios: mide unidades, no dinero. Orden: unidades disponibles desc, razón social.
 - `GET /api/reportes/productos/ubicacion-actual?soloSinUbicar=false`: productos activos; ubicación actual = `id_ubicacion_hasta` del último `movimiento_fisico` (query nativa con `LEFT JOIN LATERAL`). Productos nunca movidos: ubicación y fecha `null`. Si el último movimiento apunta a una ubicación dada de baja, la ubicación queda `null` pero la fecha se conserva; `soloSinUbicar=true` solo devuelve los nunca movidos. Orden: nombre de ubicación (nulls al final), nombre de producto.
 - `GET /api/reportes/ubicaciones/ocupacion`: ubicaciones activas (también vacías); `cantidadProductos` = productos activos distintos cuya ubicación actual es esa (CTE con `DISTINCT ON`). Orden: cantidad desc, nombre. Limitación documentada: cuenta productos, no unidades, porque el stock no está dividido por ubicación y los movimientos no mueven cantidades.
+- `GET /api/reportes/productos/mas-retirados?from&to&limit=10`: top de productos por unidades retiradas en órdenes de retiro activas; incluye productos dados de baja con `activo`; `limit` default 10, 1–100, fuera de rango → `IllegalArgumentException("El límite debe estar entre 1 y 100")`. Solo productos con al menos un retiro en el período. Orden: unidades desc, nombre asc. SQL nativo con `LIMIT :limit`.
+- `GET /api/reportes/productos/sin-rotacion?from&to&soloConStock=true`: productos activos sin retiros activos en el período; `soloConStock` default true y exige `cantidadDisponible > 0`; `ultimoRetiro` = `MAX` del último retiro activo del producto sin limitar por período. JPQL con `NOT EXISTS` y subconsulta. Orden: stock desc, nombre asc.
+- `GET /api/reportes/retiros/por-periodo?from&to&agrupacion=DIA`: serie temporal sobre órdenes de retiro activas. `agrupacion` se recibe como `String`, se valida en el service (`DIA`/`SEMANA`/`MES`, case-insensitive; inválida → `IllegalArgumentException("La agrupación debe ser DIA, SEMANA o MES")`) y se traduce a `day`/`week`/`month` para `date_trunc` nativo. `SEMANA` es ISO (lunes). Solo buckets con datos. Orden: período asc.
+- `GET /api/reportes/operarios/actividad?from&to`: todos los usuarios (sin actividad con ceros y dados de baja con `activo=false`). `cantidadRetiros`/`unidadesRetiradas` salen de un agregado de órdenes activas por usuario; `cantidadMovimientos` de un agregado de `movimiento_fisico`; `ultimaActividad` es el máximo entre ambos dentro del período. Se combinan en el service por `idUsuario` para evitar el producto cartesiano. Orden: `(cantidadRetiros + cantidadMovimientos)` desc, apellido, nombre. El DTO no incluye contraseña.
 
 Seguridad y tests:
 
 - `SecurityConfig`: `/api/reportes/**` → `hasRole("ADMINISTRADOR")`, antes de `anyRequest()`.
 - `RoleAuthorizationTest` carga todos los controllers: cada nuevo controller necesita su `@MockitoBean` (hoy `ReportService`). Por cada endpoint nuevo se agregan tres filas: `ADMINISTRADOR→true`, `OPERARIO→false`, `ANONIMO→false`.
 - `ReportControllerTest` usa `@WebMvcTest(ReportController.class)`, `@Import(SecurityConfig.class)`, `@MockitoBean ReportService` y `UserDetailsService`, y `@WithMockUser(roles = "ADMINISTRADOR")`.
-- Los mocks no validan las queries: al cambiar JPQL/SQL hay que arrancar la app con el perfil `local` (Hibernate valida los JPQL) y, si hay PostgreSQL, correr las queries nativas contra datos de prueba.
+- `ReportPeriodTest` cubre sin fechas, solo `from`, solo `to`, rango válido (el `to` queda exclusivo en el día siguiente) y `from > to`.
+- `ReportServiceTest` cubre el mapeo de cada reporte, los defaults y validaciones de `limit`/`agrupacion`, y la combinación de retiros/movimientos por `idUsuario` (usuario con retiros sin movimientos, con movimientos sin retiros, con ambos y sin actividad), incluido `activo`.
+- Los mocks no validan las queries: al cambiar JPQL/SQL hay que arrancar la app con el perfil `local` (Hibernate valida los JPQL) y, si hay PostgreSQL, correr las queries nativas contra datos de prueba. Para los reportes históricos, los datos de prueba deben incluir una orden dada de baja, un producto dado de baja con retiros, un producto jamás retirado, un usuario sin actividad, un usuario dado de baja con actividad y órdenes en los bordes de día (23:59 del `to` incluido, 00:00 del día siguiente excluido).
 
 ## Error handling
 
