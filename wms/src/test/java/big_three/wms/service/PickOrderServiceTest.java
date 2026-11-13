@@ -9,6 +9,7 @@ import big_three.wms.repository.PickOrderLineRepository;
 import big_three.wms.repository.PickOrderRepository;
 import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.UserRepository;
+import big_three.wms.security.CurrentUserProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -40,6 +41,9 @@ class PickOrderServiceTest {
     @Mock
     private ProductService productService;
 
+    @Mock
+    private CurrentUserProvider currentUserProvider;
+
     @InjectMocks
     private PickOrderService pickOrderService;
 
@@ -63,6 +67,21 @@ class PickOrderServiceTest {
         line.setIdProducto(idProducto);
         line.setCantidad(cantidad);
         return line;
+    }
+
+    private PickOrder order(Long id) {
+        PickOrder order = new PickOrder();
+        order.setIdOrdenRetiro(id);
+        order.setFechaHora(LocalDateTime.now());
+        order.setIdUsuario(1L);
+        return order;
+    }
+
+    private PickOrder deletedOrder(Long id) {
+        PickOrder order = order(id);
+        order.setFechaBaja(LocalDateTime.now().minusDays(1));
+        order.setIdUsuarioBaja(3L);
+        return order;
     }
 
     private void stubUserAndProductsExist() {
@@ -119,11 +138,7 @@ class PickOrderServiceTest {
 
     @Test
     void update_reversesOldLinesAndAppliesNewDeltas() {
-        PickOrder order = new PickOrder();
-        order.setIdOrdenRetiro(10L);
-        order.setFechaHora(LocalDateTime.now());
-        order.setIdUsuario(1L);
-        when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L)));
         when(userRepository.existsById(1L)).thenReturn(true);
         when(productRepository.existsById(2L)).thenReturn(true);
 
@@ -149,50 +164,75 @@ class PickOrderServiceTest {
     }
 
     @Test
-    void deleteById_revertsStockAndDeletesLinesAndOrder() {
-        when(pickOrderRepository.existsById(10L)).thenReturn(true);
+    void update_deleted_throws() {
+        when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(deletedOrder(10L)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> pickOrderService.update(10L, orderDto(1L, line(1L, 2))));
+
+        assertEquals("Orden de retiro no encontrada", ex.getMessage());
+        verify(pickOrderRepository, never()).save(any());
+        verify(pickOrderLineRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteById_revertsStockAndMarksDeleted() {
+        PickOrder order = order(10L);
+        when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(order));
         List<PickOrderLine> lines = List.of(savedLine(10L, 1L, 3), savedLine(10L, 2L, 5));
         when(pickOrderLineRepository.findByIdOrdenRetiro(10L)).thenReturn(lines);
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(7L);
 
         pickOrderService.deleteById(10L);
 
         verify(productService).ajustarStock(1L, 3, -3);
         verify(productService).ajustarStock(2L, 5, -5);
-        verify(pickOrderLineRepository).deleteAll(lines);
-        verify(pickOrderRepository).deleteById(10L);
-    }
-
-    @Test
-    void deleteById_notFound_throws() {
-        when(pickOrderRepository.existsById(99L)).thenReturn(false);
-
-        assertThrows(RuntimeException.class, () -> pickOrderService.deleteById(99L));
+        assertNotNull(order.getFechaBaja());
+        assertEquals(7L, order.getIdUsuarioBaja());
+        verify(pickOrderRepository).save(order);
+        verify(pickOrderLineRepository, never()).deleteAll(any());
         verify(pickOrderRepository, never()).deleteById(any());
     }
 
     @Test
-    void findAllSummaries_returnsOrdersWithoutLines() {
-        PickOrder order = new PickOrder();
-        order.setIdOrdenRetiro(1L);
-        order.setFechaHora(LocalDateTime.now());
-        order.setIdUsuario(1L);
-        when(pickOrderRepository.findAll()).thenReturn(List.of(order));
+    void deleteById_notFound_throws() {
+        when(pickOrderRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class, () -> pickOrderService.deleteById(99L));
+        verify(pickOrderRepository, never()).deleteById(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void deleteById_alreadyDeleted_throwsWithoutTouchingStock() {
+        when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(deletedOrder(10L)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> pickOrderService.deleteById(10L));
+
+        assertEquals("Orden de retiro no encontrada", ex.getMessage());
+        verify(productService, never()).ajustarStock(anyLong(), anyInt(), anyInt());
+        verify(pickOrderRepository, never()).save(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void findAllSummaries_returnsActiveOrdersWithoutLines() {
+        when(pickOrderRepository.findByFechaBajaIsNull()).thenReturn(List.of(order(1L)));
 
         List<PickOrderResponseDTO> response = pickOrderService.findAllSummaries();
 
         assertEquals(1, response.size());
         assertEquals(1L, response.get(0).getIdOrdenRetiro());
         assertNull(response.get(0).getLineasRetiro());
+        verify(pickOrderRepository).findByFechaBajaIsNull();
+        verify(pickOrderRepository, never()).findAll();
         verify(pickOrderLineRepository, never()).findByIdOrdenRetiro(any());
     }
 
     @Test
     void findById_includesLines() {
-        PickOrder order = new PickOrder();
-        order.setIdOrdenRetiro(1L);
-        order.setFechaHora(LocalDateTime.now());
-        order.setIdUsuario(1L);
-        when(pickOrderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(pickOrderRepository.findById(1L)).thenReturn(Optional.of(order(1L)));
         when(pickOrderLineRepository.findByIdOrdenRetiro(1L)).thenReturn(List.of(savedLine(1L, 2L, 4)));
 
         PickOrderResponseDTO response = pickOrderService.findById(1L);
@@ -207,5 +247,15 @@ class PickOrderServiceTest {
         when(pickOrderRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> pickOrderService.findById(99L));
+    }
+
+    @Test
+    void findById_deleted_throws() {
+        when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(deletedOrder(10L)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> pickOrderService.findById(10L));
+
+        assertEquals("Orden de retiro no encontrada", ex.getMessage());
+        verify(pickOrderLineRepository, never()).findByIdOrdenRetiro(any());
     }
 }

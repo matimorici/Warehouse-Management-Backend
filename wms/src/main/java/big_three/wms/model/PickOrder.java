@@ -30,4 +30,10 @@ public class PickOrder {
     // Posible conflicto a futuro: sin integridad referencial a nivel JPA, un idUsuario inexistente pasa
     // el guardado; hoy lo valida PickOrderService contra UserRepository, pero la BD sigue siendo la única garantía.
     private Long idUsuario;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
+
+    @Column(name = "id_usuario_baja")
+    private Long idUsuarioBaja;
 }

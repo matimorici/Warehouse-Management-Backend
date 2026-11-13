@@ -9,6 +9,7 @@ import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.ProveedorRepository;
 import big_three.wms.repository.PurchaseOrderLineRepository;
 import big_three.wms.repository.PurchaseOrderRepository;
+import big_three.wms.security.CurrentUserProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -41,6 +42,9 @@ class PurchaseOrderServiceTest {
     @Mock
     private ProductService productService;
 
+    @Mock
+    private CurrentUserProvider currentUserProvider;
+
     @InjectMocks
     private PurchaseOrderService purchaseOrderService;
 
@@ -64,6 +68,13 @@ class PurchaseOrderServiceTest {
         order.setDateTime(LocalDateTime.now());
         order.setIdSupplier(1L);
         order.setStatus(status);
+        return order;
+    }
+
+    private PurchaseOrder deletedOrder(Long id, PurchaseOrder.Status status) {
+        PurchaseOrder order = order(id, status);
+        order.setDeletedDateTime(LocalDateTime.now().minusDays(1));
+        order.setIdDeletedByUser(3L);
         return order;
     }
 
@@ -98,6 +109,7 @@ class PurchaseOrderServiceTest {
         assertEquals(2, response.getLines().size());
         assertEquals("PENDIENTE", response.getStatus());
         assertNotNull(response.getDateTime());
+        assertNull(response.getReceptionDateTime());
 
         verify(purchaseOrderRepository).save(argThat(o -> o.getIdSupplier() == 1L && o.getStatus() == PurchaseOrder.Status.PENDIENTE));
         verify(purchaseOrderLineRepository).save(argThat(l -> l.getIdPurchaseOrder() == 10L && l.getIdProduct() == 1L));
@@ -129,14 +141,17 @@ class PurchaseOrderServiceTest {
     }
 
     @Test
-    void findAllSummaries_returnsOrdersWithoutLines() {
-        when(purchaseOrderRepository.findAll()).thenReturn(List.of(order(1L, PurchaseOrder.Status.PENDIENTE)));
+    void findAllSummaries_returnsActiveOrdersWithoutLines() {
+        when(purchaseOrderRepository.findByDeletedDateTimeIsNull())
+                .thenReturn(List.of(order(1L, PurchaseOrder.Status.PENDIENTE)));
 
         List<PurchaseOrderResponseDTO> response = purchaseOrderService.findAllSummaries();
 
         assertEquals(1, response.size());
         assertEquals(1L, response.get(0).getIdPurchaseOrder());
         assertNull(response.get(0).getLines());
+        verify(purchaseOrderRepository).findByDeletedDateTimeIsNull();
+        verify(purchaseOrderRepository, never()).findAll();
         verify(purchaseOrderLineRepository, never()).findByIdPurchaseOrder(any());
     }
 
@@ -159,6 +174,17 @@ class PurchaseOrderServiceTest {
         RuntimeException ex = assertThrows(RuntimeException.class, () -> purchaseOrderService.findById(99L));
 
         assertEquals("Orden de compra no encontrada", ex.getMessage());
+    }
+
+    @Test
+    void findById_deleted_throws() {
+        when(purchaseOrderRepository.findById(10L))
+                .thenReturn(Optional.of(deletedOrder(10L, PurchaseOrder.Status.PENDIENTE)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> purchaseOrderService.findById(10L));
+
+        assertEquals("Orden de compra no encontrada", ex.getMessage());
+        verify(purchaseOrderLineRepository, never()).findByIdPurchaseOrder(any());
     }
 
     @Test
@@ -200,6 +226,25 @@ class PurchaseOrderServiceTest {
     }
 
     @Test
+    void update_recibida_keepsReceivedDateTime() {
+        PurchaseOrder received = order(10L, PurchaseOrder.Status.RECIBIDA);
+        LocalDateTime reception = LocalDateTime.of(2026, 1, 10, 9, 30);
+        received.setReceivedDateTime(reception);
+        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(received));
+        when(proveedorRepository.existsById(1L)).thenReturn(true);
+        when(productRepository.existsById(2L)).thenReturn(true);
+
+        List<PurchaseOrderLine> oldLines = List.of(savedLine(10L, 1L, 3));
+        List<PurchaseOrderLine> newLines = List.of(savedLine(10L, 2L, 4));
+        when(purchaseOrderLineRepository.findByIdPurchaseOrder(10L)).thenReturn(oldLines, newLines);
+
+        PurchaseOrderResponseDTO response = purchaseOrderService.update(10L, orderDto(1L, line(2L, 4)));
+
+        assertEquals(reception, received.getReceivedDateTime());
+        assertEquals(reception, response.getReceptionDateTime());
+    }
+
+    @Test
     void update_notFound_throws() {
         when(purchaseOrderRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -209,17 +254,34 @@ class PurchaseOrderServiceTest {
     }
 
     @Test
-    void receive_adjustsStockAndMarksReceived() {
-        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L, PurchaseOrder.Status.PENDIENTE)));
+    void update_deleted_throws() {
+        when(purchaseOrderRepository.findById(10L))
+                .thenReturn(Optional.of(deletedOrder(10L, PurchaseOrder.Status.PENDIENTE)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> purchaseOrderService.update(10L, orderDto(1L, line(1L, 2))));
+
+        assertEquals("Orden de compra no encontrada", ex.getMessage());
+        verify(purchaseOrderRepository, never()).save(any());
+        verify(purchaseOrderLineRepository, never()).save(any());
+    }
+
+    @Test
+    void receive_adjustsStockMarksReceivedAndSetsReceptionDateTime() {
+        PurchaseOrder order = order(10L, PurchaseOrder.Status.PENDIENTE);
+        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order));
         List<PurchaseOrderLine> lines = List.of(savedLine(10L, 1L, 3), savedLine(10L, 2L, 5));
         when(purchaseOrderLineRepository.findByIdPurchaseOrder(10L)).thenReturn(lines, lines);
 
+        LocalDateTime before = LocalDateTime.now();
         PurchaseOrderResponseDTO response = purchaseOrderService.receive(10L);
 
         verify(productService).ajustarStock(1L, 3, 0);
         verify(productService).ajustarStock(2L, 5, 0);
         assertEquals("RECIBIDA", response.getStatus());
-        assertEquals("RECIBIDA", purchaseOrderRepository.findById(10L).get().getStatus().name());
+        assertNotNull(order.getReceivedDateTime());
+        assertFalse(order.getReceivedDateTime().isBefore(before));
+        assertEquals(order.getReceivedDateTime(), response.getReceptionDateTime());
     }
 
     @Test
@@ -252,30 +314,52 @@ class PurchaseOrderServiceTest {
     }
 
     @Test
-    void deleteById_recibida_revertsStockAndDeletesLinesAndOrder() {
-        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L, PurchaseOrder.Status.RECIBIDA)));
+    void receive_deleted_throws() {
+        when(purchaseOrderRepository.findById(10L))
+                .thenReturn(Optional.of(deletedOrder(10L, PurchaseOrder.Status.PENDIENTE)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> purchaseOrderService.receive(10L));
+
+        assertEquals("Orden de compra no encontrada", ex.getMessage());
+        verify(productService, never()).ajustarStock(anyLong(), anyInt(), anyInt());
+        verify(purchaseOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteById_recibida_revertsStockAndMarksDeleted() {
+        PurchaseOrder order = order(10L, PurchaseOrder.Status.RECIBIDA);
+        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order));
         List<PurchaseOrderLine> lines = List.of(savedLine(10L, 1L, 3), savedLine(10L, 2L, 5));
-        when(purchaseOrderLineRepository.findByIdPurchaseOrder(10L)).thenReturn(lines, lines);
+        when(purchaseOrderLineRepository.findByIdPurchaseOrder(10L)).thenReturn(lines);
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(7L);
 
         purchaseOrderService.deleteById(10L);
 
         verify(productService).ajustarStock(1L, -3, 0);
         verify(productService).ajustarStock(2L, -5, 0);
-        verify(purchaseOrderLineRepository).deleteAll(lines);
-        verify(purchaseOrderRepository).deleteById(10L);
+        assertNotNull(order.getDeletedDateTime());
+        assertEquals(7L, order.getIdDeletedByUser());
+        verify(purchaseOrderRepository).save(order);
+        verify(purchaseOrderLineRepository, never()).deleteAll(any());
+        verify(purchaseOrderRepository, never()).deleteById(any());
     }
 
     @Test
-    void deleteById_pendiente_doesNotAdjustStock() {
-        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L, PurchaseOrder.Status.PENDIENTE)));
+    void deleteById_pendiente_doesNotAdjustStockAndMarksDeleted() {
+        PurchaseOrder order = order(10L, PurchaseOrder.Status.PENDIENTE);
+        when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order));
         List<PurchaseOrderLine> lines = List.of(savedLine(10L, 1L, 3));
-        when(purchaseOrderLineRepository.findByIdPurchaseOrder(10L)).thenReturn(lines, lines);
+        when(purchaseOrderLineRepository.findByIdPurchaseOrder(10L)).thenReturn(lines);
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(7L);
 
         purchaseOrderService.deleteById(10L);
 
         verify(productService, never()).ajustarStock(anyLong(), anyInt(), anyInt());
-        verify(purchaseOrderLineRepository).deleteAll(lines);
-        verify(purchaseOrderRepository).deleteById(10L);
+        assertNotNull(order.getDeletedDateTime());
+        assertEquals(7L, order.getIdDeletedByUser());
+        verify(purchaseOrderRepository).save(order);
+        verify(purchaseOrderLineRepository, never()).deleteAll(any());
+        verify(purchaseOrderRepository, never()).deleteById(any());
     }
 
     @Test
@@ -284,5 +368,20 @@ class PurchaseOrderServiceTest {
 
         assertThrows(RuntimeException.class, () -> purchaseOrderService.deleteById(99L));
         verify(purchaseOrderRepository, never()).deleteById(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void deleteById_alreadyDeleted_throwsWithoutTouchingStock() {
+        when(purchaseOrderRepository.findById(10L))
+                .thenReturn(Optional.of(deletedOrder(10L, PurchaseOrder.Status.RECIBIDA)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> purchaseOrderService.deleteById(10L));
+
+        assertEquals("Orden de compra no encontrada", ex.getMessage());
+        verify(productService, never()).ajustarStock(anyLong(), anyInt(), anyInt());
+        verify(purchaseOrderRepository, never()).save(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
     }
 }

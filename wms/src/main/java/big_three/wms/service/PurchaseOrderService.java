@@ -10,6 +10,7 @@ import big_three.wms.repository.PurchaseOrderLineRepository;
 import big_three.wms.repository.PurchaseOrderRepository;
 import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.ProveedorRepository;
+import big_three.wms.security.CurrentUserProvider;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -24,17 +25,20 @@ public class PurchaseOrderService {
     private final ProveedorRepository proveedorRepository;
     private final ProductRepository productRepository;
     private final ProductService productService;
+    private final CurrentUserProvider currentUserProvider;
 
     public PurchaseOrderService(PurchaseOrderRepository purchaseOrderRepository,
                             PurchaseOrderLineRepository purchaseOrderLineRepository,
                             ProveedorRepository proveedorRepository,
                             ProductRepository productRepository,
-                            ProductService productService) {
+                            ProductService productService,
+                            CurrentUserProvider currentUserProvider) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.purchaseOrderLineRepository = purchaseOrderLineRepository;
         this.proveedorRepository = proveedorRepository;
         this.productRepository = productRepository;
         this.productService = productService;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Transactional
@@ -66,22 +70,19 @@ public class PurchaseOrderService {
     }
 
     public List<PurchaseOrderResponseDTO> findAllSummaries() {
-        return purchaseOrderRepository.findAll()
+        return purchaseOrderRepository.findByDeletedDateTimeIsNull()
                 .stream()
                 .map(this::buildSummary)
                 .collect(Collectors.toList());
     }
 
     public PurchaseOrderResponseDTO findById(Long id) {
-        PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Orden de compra no encontrada"));
-        return buildResponse(purchaseOrder);
+        return buildResponse(findActiveOrThrow(id));
     }
 
     @Transactional
     public PurchaseOrderResponseDTO receive(Long id) {
-        PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Orden de compra no encontrada"));
+        PurchaseOrder purchaseOrder = findActiveOrThrow(id);
 
         if (purchaseOrder.getStatus() == PurchaseOrder.Status.RECIBIDA) {
             throw new IllegalArgumentException("La orden ya fue recibida");
@@ -95,6 +96,7 @@ public class PurchaseOrderService {
         }
 
         purchaseOrder.setStatus(PurchaseOrder.Status.RECIBIDA);
+        purchaseOrder.setReceivedDateTime(LocalDateTime.now());
         purchaseOrderRepository.save(purchaseOrder);
 
         return buildResponse(purchaseOrder);
@@ -102,8 +104,7 @@ public class PurchaseOrderService {
 
     @Transactional
     public PurchaseOrderResponseDTO update(Long id, PurchaseOrderCreateDTO dto) {
-        PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Orden de compra no encontrada"));
+        PurchaseOrder purchaseOrder = findActiveOrThrow(id);
 
         if (!proveedorRepository.existsById(dto.getIdSupplier())) {
             throw new RuntimeException("Proveedor no encontrado");
@@ -146,8 +147,7 @@ public class PurchaseOrderService {
 
     @Transactional
     public void deleteById(Long id) {
-        PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Orden de compra no encontrada"));
+        PurchaseOrder purchaseOrder = findActiveOrThrow(id);
 
         List<PurchaseOrderLine> lines = purchaseOrderLineRepository.findByIdPurchaseOrder(id);
         if (purchaseOrder.getStatus() == PurchaseOrder.Status.RECIBIDA) {
@@ -156,8 +156,18 @@ public class PurchaseOrderService {
             }
         }
 
-        purchaseOrderLineRepository.deleteAll(lines);
-        purchaseOrderRepository.deleteById(id);
+        purchaseOrder.setDeletedDateTime(LocalDateTime.now());
+        purchaseOrder.setIdDeletedByUser(currentUserProvider.requireCurrentUserId());
+        purchaseOrderRepository.save(purchaseOrder);
+    }
+
+    private PurchaseOrder findActiveOrThrow(Long id) {
+        PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Orden de compra no encontrada"));
+        if (purchaseOrder.getDeletedDateTime() != null) {
+            throw new RuntimeException("Orden de compra no encontrada");
+        }
+        return purchaseOrder;
     }
 
     private PurchaseOrderResponseDTO buildResponse(PurchaseOrder purchaseOrder) {
@@ -170,6 +180,7 @@ public class PurchaseOrderService {
                 purchaseOrder.getDateTime(),
                 purchaseOrder.getIdSupplier(),
                 purchaseOrder.getStatus().name(),
+                purchaseOrder.getReceivedDateTime(),
                 orderLines);
     }
 
@@ -179,6 +190,7 @@ public class PurchaseOrderService {
                 purchaseOrder.getDateTime(),
                 purchaseOrder.getIdSupplier(),
                 purchaseOrder.getStatus().name(),
+                purchaseOrder.getReceivedDateTime(),
                 null);
     }
 }

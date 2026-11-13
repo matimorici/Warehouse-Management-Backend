@@ -15,5 +15,6 @@ public class PurchaseOrderResponseDTO {
     private LocalDateTime dateTime;
     private Long idSupplier;
     private String status;
+    private LocalDateTime receptionDateTime;
     private List<PurchaseOrderLineResponseDTO> lines;
 }
