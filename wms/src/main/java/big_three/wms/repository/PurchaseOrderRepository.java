@@ -9,4 +9,6 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
 
     // Solo órdenes activas (fecha_baja IS NULL)
     List<PurchaseOrder> findByDeletedDateTimeIsNull();
+
+    boolean existsByIdSupplierAndStatusAndDeletedDateTimeIsNull(Long idSupplier, PurchaseOrder.Status status);
 }

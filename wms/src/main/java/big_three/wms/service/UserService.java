@@ -6,6 +6,7 @@ import big_three.wms.dto.UserResponseDTO;
 import big_three.wms.exception.InvalidCredentialsException;
 import big_three.wms.model.Role;
 import big_three.wms.repository.UserRepository;
+import big_three.wms.security.CurrentUserProvider;
 import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,15 +21,19 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CurrentUserProvider currentUserProvider;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       CurrentUserProvider currentUserProvider) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.currentUserProvider = currentUserProvider;
     }
 
     public UserResponseDTO create(UserCreateDTO dto) {
         if (userRepository.existsByCuil(dto.getCuil())) {
-            throw new IllegalArgumentException("Ya existe un usuario con ese CUIL: " + dto.getCuil());
+            throw new IllegalArgumentException(
+                    "Ya existe un usuario con ese CUIL (puede estar dado de baja): " + dto.getCuil());
         }
 
         User u = new User();
@@ -45,7 +50,18 @@ public class UserService {
     public void deleteById(Long id) {
         User u = userRepository.findByIdUsuarioAndFechaBajaIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado para eliminar"));
+
+        Long currentUserId = currentUserProvider.requireCurrentUserId();
+        if (id.equals(currentUserId)) {
+            throw new IllegalArgumentException("No podés darte de baja a vos mismo");
+        }
+        if (u.getRol() == Role.ADMINISTRADOR
+                && userRepository.countByRolAndFechaBajaIsNull(Role.ADMINISTRADOR) <= 1) {
+            throw new IllegalArgumentException("No se puede dar de baja al último administrador");
+        }
+
         u.setFechaBaja(LocalDateTime.now());
+        u.setIdUsuarioBaja(currentUserId);
         userRepository.save(u);
     }
 

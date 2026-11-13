@@ -54,7 +54,7 @@ class SupplierRatingServiceTest {
 
     @Test
     void create_success_returnsDto() {
-        when(supplierRepository.findById(1L)).thenReturn(Optional.of(new Proveedor()));
+        when(supplierRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Proveedor()));
         when(ratingRepository.save(any(SupplierRating.class))).thenAnswer(inv -> {
             SupplierRating saved = inv.getArgument(0);
             saved.setId(1L);
@@ -72,7 +72,7 @@ class SupplierRatingServiceTest {
 
     @Test
     void create_supplierNotFound_throws() {
-        when(supplierRepository.findById(99L)).thenReturn(Optional.empty());
+        when(supplierRepository.findByIdProveedorAndFechaBajaIsNull(99L)).thenReturn(Optional.empty());
         SupplierRatingCreateDTO dto = dto();
         dto.setIdSupplier(99L);
 
@@ -80,6 +80,26 @@ class SupplierRatingServiceTest {
 
         assertEquals("Proveedor no encontrado", ex.getMessage());
         verify(ratingRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedSupplierIsTreatedAsNotFound() {
+        when(supplierRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> ratingService.create(dto()));
+
+        assertEquals("Proveedor no encontrado", ex.getMessage());
+        verify(ratingRepository, never()).save(any());
+    }
+
+    @Test
+    void findBySupplier_deletedSupplierIsTreatedAsNotFound() {
+        when(supplierRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> ratingService.findBySupplier(1L));
+
+        assertEquals("Proveedor no encontrado", ex.getMessage());
+        verify(ratingRepository, never()).findByIdSupplier(any());
     }
 
     @Test
@@ -102,7 +122,7 @@ class SupplierRatingServiceTest {
 
     @Test
     void findBySupplier_supplierNotFound_throws() {
-        when(supplierRepository.existsById(99L)).thenReturn(false);
+        when(supplierRepository.existsByIdProveedorAndFechaBajaIsNull(99L)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> ratingService.findBySupplier(99L));
 
@@ -112,7 +132,7 @@ class SupplierRatingServiceTest {
 
     @Test
     void findBySupplier_noRatings_returnsEmpty() {
-        when(supplierRepository.existsById(1L)).thenReturn(true);
+        when(supplierRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
         when(ratingRepository.findByIdSupplier(1L)).thenReturn(List.of());
 
         List<SupplierRatingResponseDTO> response = ratingService.findBySupplier(1L);
@@ -122,7 +142,7 @@ class SupplierRatingServiceTest {
 
     @Test
     void findBySupplier_returnsList() {
-        when(supplierRepository.existsById(1L)).thenReturn(true);
+        when(supplierRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
         when(ratingRepository.findByIdSupplier(1L)).thenReturn(List.of(rating(1L)));
 
         List<SupplierRatingResponseDTO> response = ratingService.findBySupplier(1L);

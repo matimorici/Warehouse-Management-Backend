@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "producto")
 @Data
@@ -32,6 +34,12 @@ public class Product {
     @Column(name = "origen_codigo_barras", nullable = false)
     @Enumerated(EnumType.STRING)
     private OrigenCodigoBarras origenCodigoBarras;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
+
+    @Column(name = "id_usuario_baja")
+    private Long idUsuarioBaja;
 
     public enum OrigenCodigoBarras {
         FABRICANTE,

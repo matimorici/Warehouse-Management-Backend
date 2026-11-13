@@ -25,7 +25,7 @@ public class SupplierRatingService {
 
     @Transactional
     public SupplierRatingResponseDTO create (SupplierRatingCreateDTO dto){
-        Proveedor supplier = supplierRepository.findById(dto.getIdSupplier())
+        Proveedor supplier = supplierRepository.findByIdProveedorAndFechaBajaIsNull(dto.getIdSupplier())
                 .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
 
         SupplierRating sr = new SupplierRating();
@@ -62,7 +62,7 @@ public class SupplierRatingService {
     }
 
     public List<SupplierRatingResponseDTO> findBySupplier(Long idSupplier) {
-        if (!supplierRepository.existsById(idSupplier)) {
+        if (!supplierRepository.existsByIdProveedorAndFechaBajaIsNull(idSupplier)) {
             throw new RuntimeException("Proveedor no encontrado");
         }
         return ratingRepository.findByIdSupplier(idSupplier)

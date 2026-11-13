@@ -21,6 +21,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -151,6 +152,17 @@ class ProductControllerTest {
         mockMvc.perform(delete("/api/productos/1")
                         .with(csrf()))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void delete_productWithAvailableStock_returns400() throws Exception {
+        doThrow(new IllegalArgumentException("No se puede dar de baja un producto con stock disponible"))
+                .when(productService).deleteById(1L);
+
+        mockMvc.perform(delete("/api/productos/1")
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("No se puede dar de baja un producto con stock disponible"));
     }
 
     @Test

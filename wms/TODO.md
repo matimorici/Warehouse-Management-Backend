@@ -118,5 +118,18 @@ Build read-only reporting endpoints for the admin UI from the existing product, 
   - [X] `PurchaseOrderResponseDTO.receptionDateTime` + tests de services y controller actualizados.
   - [X] Verificado con `./mvnw test` (236 tests) y arranque contra PostgreSQL local: Flyway aplicó V5 y Hibernate validó el schema.
   - Consecuencia documentada en README: las órdenes dadas de baja conservan sus líneas, así que un producto o proveedor referenciado por ellas no se puede borrar físicamente (FK sin cascade) hasta que 1B los pase a baja lógica.
-- [ ] **1B — Baja lógica de usuario, producto, proveedor y ubicación.** Las columnas ya existen en V5; falta mapearlas y aplicar las reglas de bloqueo. No crear migración nueva.
+- [X] **1B — Baja lógica de usuario, producto, proveedor y ubicación.**
+  - [X] Refactor de `usuario.fecha_baja`: se reutiliza la columna creada en V4 y se mapea junto con `id_usuario_baja` (V5). No se agregó una migración nueva ni se duplicó la columna.
+  - [X] `User`, `Product` y `Proveedor`: `fechaBaja`/`idUsuarioBaja`; `Location`: `deletedDateTime`/`idDeletedByUser`.
+  - [X] `UserService`: baja lógica con `idUsuarioBaja`; no auto-baja; no baja del último `ADMINISTRADOR` activo; listados/búsquedas solo activos; `existsByCuil` sigue global; mensaje de duplicado aclara que puede estar dado de baja.
+  - [X] `CustomUserDetailsService`: carga por CUIL y marca `.disabled(true)` si `fechaBaja != null`; el login falla por el camino genérico y cuenta como intento fallido.
+  - [X] `ProductService`: baja lógica solo con `cantidadDisponible == 0` (sin fila de stock = 0), sin borrar `Stock`; listados/búsquedas/stock/ajustes tratan al producto dado de baja como inexistente; código de barras único global.
+  - [X] `ProveedorService`: baja lógica solo sin productos activos ni órdenes de compra `PENDIENTE` activas; listados/búsquedas/actualización solo activos; productos, órdenes y valoraciones exigen proveedor activo; CUIT único global.
+  - [X] `LocationService`: baja lógica solo si ningún producto activo está actualmente en la ubicación (query nativa sobre el último `movimiento_fisico`); listados/búsquedas/actualización solo activos; movimientos físicos exigen ubicaciones activas.
+  - [X] `PickOrderService`, `PurchaseOrderService`, `PhysicalMovementService`, `SupplierRatingService` y `BarcodeService`: chequeos de recurso activo y mensajes existentes.
+  - [X] Tests de services/controllers/seguridad y documentación (`AGENTS.md`, `README.md`).
+- [ ] **Pendientes de baja lógica (post-1B).**
+  - [ ] Reactivación: no hay endpoint ni flujo para volver a activar una fila dada de baja (habría que limpiar `fecha_baja`/`id_usuario_baja` con reglas de negocio).
+  - [ ] Sesiones abiertas: una sesión iniciada antes de la baja sigue válida hasta expirar (90 min); evaluar invalidación explícita de sesiones al dar de baja un usuario.
+  - [ ] Auditoría de bajas: hoy solo se guarda fecha + usuario; no hay historial de cambios ni endpoint de consulta de bajas.
 - [ ] **Reportes (prompts 2 a 5).** Pendiente: infraestructura de reportes, reportes de inventario/período/compras y (opcional) auditoría de bajas. Recordar que las órdenes RECIBIDAS anteriores a V5 tienen `fecha_recepcion = NULL` (indicador de calidad de datos en el ranking de proveedores).

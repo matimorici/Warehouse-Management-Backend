@@ -3,7 +3,11 @@ package big_three.wms.service;
 import big_three.wms.dto.ProveedorCreateDTO;
 import big_three.wms.dto.ProveedorResponseDTO;
 import big_three.wms.model.Proveedor;
+import big_three.wms.model.PurchaseOrder;
+import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.ProveedorRepository;
+import big_three.wms.repository.PurchaseOrderRepository;
+import big_three.wms.security.CurrentUserProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -22,6 +26,15 @@ class ProveedorServiceTest {
 
     @Mock
     private ProveedorRepository proveedorRepository;
+
+    @Mock
+    private ProductRepository productRepository;
+
+    @Mock
+    private PurchaseOrderRepository purchaseOrderRepository;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private ProveedorService proveedorService;
@@ -69,29 +82,43 @@ class ProveedorServiceTest {
                 () -> proveedorService.create(dto("20-12345678-9")));
 
         assertTrue(ex.getMessage().contains("20-12345678-9"));
+        assertTrue(ex.getMessage().contains("puede estar dado de baja"));
         verify(proveedorRepository, never()).save(any());
     }
 
     @Test
-    void findAll_mapsToDtos() {
-        when(proveedorRepository.findAll()).thenReturn(List.of(proveedor(1L, "20-12345678-9")));
+    void findAll_returnsOnlyActiveProviders() {
+        when(proveedorRepository.findByFechaBajaIsNull())
+                .thenReturn(List.of(proveedor(1L, "20-12345678-9")));
 
         List<ProveedorResponseDTO> response = proveedorService.findAll();
 
         assertEquals(1, response.size());
         assertEquals(1L, response.get(0).getIdProveedor());
+        verify(proveedorRepository).findByFechaBajaIsNull();
+        verify(proveedorRepository, never()).findAll();
     }
 
     @Test
     void findById_notFound_throws() {
-        when(proveedorRepository.findById(99L)).thenReturn(Optional.empty());
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> proveedorService.findById(99L));
     }
 
     @Test
+    void findById_deletedProviderIsTreatedAsNotFound() {
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> proveedorService.findById(1L));
+
+        assertEquals("Proveedor no encontrado", ex.getMessage());
+    }
+
+    @Test
     void update_success_updatesFields() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L, "20-12345678-9")));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L))
+                .thenReturn(Optional.of(proveedor(1L, "20-12345678-9")));
         when(proveedorRepository.save(any(Proveedor.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProveedorResponseDTO response = proveedorService.update(1L, dto("20-12345678-9"));
@@ -102,7 +129,8 @@ class ProveedorServiceTest {
 
     @Test
     void update_duplicateCuitOnAnotherProveedor_throws() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L, "20-11111111-1")));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L))
+                .thenReturn(Optional.of(proveedor(1L, "20-11111111-1")));
         when(proveedorRepository.existsByCuit("20-12345678-9")).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> proveedorService.update(1L, dto("20-12345678-9")));
@@ -111,18 +139,65 @@ class ProveedorServiceTest {
 
     @Test
     void deleteById_notFound_throws() {
-        when(proveedorRepository.existsById(99L)).thenReturn(false);
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> proveedorService.deleteById(99L));
+        verify(proveedorRepository, never()).save(any());
         verify(proveedorRepository, never()).deleteById(any());
     }
 
     @Test
-    void deleteById_existing_deletes() {
-        when(proveedorRepository.existsById(1L)).thenReturn(true);
+    void deleteById_deletedProviderIsTreatedAsNotFound() {
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> proveedorService.deleteById(1L));
+
+        assertEquals("Proveedor no encontrado para eliminar", ex.getMessage());
+        verify(proveedorRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteById_withActiveProducts_throws() {
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L))
+                .thenReturn(Optional.of(proveedor(1L, "20-12345678-9")));
+        when(productRepository.existsByProveedor_IdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> proveedorService.deleteById(1L));
+
+        assertEquals("No se puede dar de baja un proveedor con productos activos u órdenes pendientes",
+                ex.getMessage());
+        verify(proveedorRepository, never()).save(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void deleteById_withPendingPurchaseOrders_throws() {
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L))
+                .thenReturn(Optional.of(proveedor(1L, "20-12345678-9")));
+        when(purchaseOrderRepository.existsByIdSupplierAndStatusAndDeletedDateTimeIsNull(
+                1L, PurchaseOrder.Status.PENDIENTE)).thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> proveedorService.deleteById(1L));
+
+        assertEquals("No se puede dar de baja un proveedor con productos activos u órdenes pendientes",
+                ex.getMessage());
+        verify(proveedorRepository, never()).save(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void deleteById_withoutActiveProductsOrPendingOrders_setsFechaBajaAndSaves() {
+        Proveedor proveedor = proveedor(1L, "20-12345678-9");
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
 
         proveedorService.deleteById(1L);
 
-        verify(proveedorRepository).deleteById(1L);
+        assertNotNull(proveedor.getFechaBaja());
+        assertEquals(2L, proveedor.getIdUsuarioBaja());
+        verify(proveedorRepository).save(proveedor);
+        verify(proveedorRepository, never()).deleteById(any());
     }
 }

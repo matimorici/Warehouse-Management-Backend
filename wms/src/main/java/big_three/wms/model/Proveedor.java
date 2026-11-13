@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "proveedor")
 @Data
@@ -30,4 +32,10 @@ public class Proveedor {
 
     @Column(name = "direccion", length = 200)
     private String direccion;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
+
+    @Column(name = "id_usuario_baja")
+    private Long idUsuarioBaja;
 }

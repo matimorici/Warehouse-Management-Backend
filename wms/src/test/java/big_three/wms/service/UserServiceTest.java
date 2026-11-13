@@ -6,6 +6,7 @@ import big_three.wms.exception.InvalidCredentialsException;
 import big_three.wms.model.Role;
 import big_three.wms.model.User;
 import big_three.wms.repository.UserRepository;
+import big_three.wms.security.CurrentUserProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,6 +30,9 @@ class UserServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private UserService userService;
@@ -94,6 +98,7 @@ class UserServiceTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> userService.create(dto));
 
         assertTrue(ex.getMessage().contains(dto.getCuil()));
+        assertTrue(ex.getMessage().contains("puede estar dado de baja"));
         verify(userRepository, never()).save(any());
     }
 
@@ -150,11 +155,61 @@ class UserServiceTest {
     void deleteById_existingActiveUser_setsFechaBajaAndSaves() {
         User existing = user(1L, "20-12345678-9", "hash");
         when(userRepository.findByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(Optional.of(existing));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
 
         userService.deleteById(1L);
 
         assertNotNull(existing.getFechaBaja());
+        assertEquals(2L, existing.getIdUsuarioBaja());
         verify(userRepository).save(existing);
+        verify(userRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteById_self_throws() {
+        User existing = user(1L, "20-12345678-9", "hash");
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(Optional.of(existing));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(1L);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> userService.deleteById(1L));
+
+        assertEquals("No podés darte de baja a vos mismo", ex.getMessage());
+        assertNull(existing.getFechaBaja());
+        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteById_lastActiveAdmin_throws() {
+        User admin = user(1L, "20-12345678-9", "hash");
+        admin.setRol(Role.ADMINISTRADOR);
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(Optional.of(admin));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
+        when(userRepository.countByRolAndFechaBajaIsNull(Role.ADMINISTRADOR)).thenReturn(1L);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> userService.deleteById(1L));
+
+        assertEquals("No se puede dar de baja al último administrador", ex.getMessage());
+        assertNull(admin.getFechaBaja());
+        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteById_adminWithAnotherActiveAdmin_setsFechaBajaAndSaves() {
+        User admin = user(1L, "20-12345678-9", "hash");
+        admin.setRol(Role.ADMINISTRADOR);
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(Optional.of(admin));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
+        when(userRepository.countByRolAndFechaBajaIsNull(Role.ADMINISTRADOR)).thenReturn(2L);
+
+        userService.deleteById(1L);
+
+        assertNotNull(admin.getFechaBaja());
+        assertEquals(2L, admin.getIdUsuarioBaja());
+        verify(userRepository).save(admin);
         verify(userRepository, never()).deleteById(any());
     }
 

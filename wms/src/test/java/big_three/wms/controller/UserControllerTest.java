@@ -17,6 +17,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -74,6 +75,17 @@ class UserControllerTest {
                                 {"nombre": "Juan", "apellido": "Perez", "cuil": "20-12345678-9", "contrasena": "short"}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void delete_businessRuleViolation_returns400() throws Exception {
+        doThrow(new IllegalArgumentException("No podés darte de baja a vos mismo"))
+                .when(userService).deleteById(1L);
+
+        mockMvc.perform(delete("/api/usuarios/1")
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("No podés darte de baja a vos mismo"));
     }
 
     @Test
