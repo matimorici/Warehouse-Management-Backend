@@ -120,6 +120,7 @@ El schema no se mantiene a mano: lo gobierna **Flyway**, una herramienta de migr
 | V2 | `V2__ensure_codigo_interno_seq.sql` | Reparación: garantiza que `codigo_interno_seq` exista en bases viejas baselineadas como V1 (armadas antes de que la secuencia existiera). No-op en bases nuevas. |
 | V3 | `V3__seed_admin_user.sql` | Inserta el usuario administrador por defecto. |
 | V4 | `V4__agregar_fecha_baja_usuario.sql` | Agrega `usuario.fecha_baja` (NULL = activo) y el índice parcial `idx_usuario_activos`. Habilita la baja lógica sin perder trazabilidad. |
+| V5 | `V5__soft_delete_and_traceability.sql` | Agrega `fecha_baja` e `id_usuario_baja` (más el `CHECK` de coherencia) a `usuario`, `producto`, `proveedor`, `ubicacion`, `orden_compra` y `orden_retiro`. En `usuario` reutiliza el `fecha_baja` de V4. Agrega `orden_compra.fecha_recepcion` (sin backfill: las órdenes recibidas históricas quedan en NULL). |
 
 > **Usuario administrador por defecto (seed V3):** CUIL `20-00000000-1`, contraseña `Admin1234`, rol `ADMINISTRADOR`. Existe en todas las bases (nuevas o baselineadas) tras arrancar la app. Se puede loguear con `POST /api/auth/login` o desactivar/modificar si se prefiere.
 
@@ -336,9 +337,11 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 | `GET` | `/api/ordenes-retiro` | Listar órdenes (resumen, sin líneas) | — |
 | `GET` | `/api/ordenes-retiro/{id}` | Buscar orden por ID (con líneas) | — |
 | `PUT` | `/api/ordenes-retiro/{id}` | Actualizar orden | `{ "idUsuario", "lineasRetiro": [{ "idProducto", "cantidad" }] }` |
-| `DELETE` | `/api/ordenes-retiro/{id}` | Eliminar orden (revierte stock) | — |
+| `DELETE` | `/api/ordenes-retiro/{id}` | Dar de baja la orden (lógica; revierte stock) | — |
 
 > Al crear/actualizar una orden de retiro, el stock se ajusta automáticamente: se resta de `cantidadDisponible` y se suma a `cantidadPendiente`. Al eliminar, se revierte el ajuste.
+>
+> **Baja lógica:** `DELETE` no borra la fila ni sus líneas. Setea `orden_retiro.fecha_baja` y `id_usuario_baja`; una orden dada de baja deja de aparecer en los listados y se considera inexistente para `GET /{id}`, `PUT` y un nuevo `DELETE`.
 
 ### Órdenes de Compra
 
@@ -349,9 +352,15 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 | `GET` | `/api/ordenes-compra/{id}` | Buscar orden por ID (con líneas) | — |
 | `PUT` | `/api/ordenes-compra/{id}` | Actualizar orden | `{ "idSupplier", "lines": [{ "idProduct", "amount" }] }` |
 | `PUT` | `/api/ordenes-compra/{id}/recibir` | Marcar orden como recibida (suma al stock disponible) | — |
-| `DELETE` | `/api/ordenes-compra/{id}` | Eliminar orden (revierte stock si ya fue recibida) | — |
+| `DELETE` | `/api/ordenes-compra/{id}` | Dar de baja la orden (lógica; revierte stock si ya fue recibida) | — |
 
-> Al **recibir** una orden de compra, cada línea suma su cantidad a `cantidadDisponible` del producto. Si se actualiza una orden ya recibida, se revierte el ajuste de las líneas viejas y se aplica el de las nuevas; al eliminar una recibida, se revierte el stock. El estado inicial es `PENDIENTE`.
+> Al **recibir** una orden de compra, cada línea suma su cantidad a `cantidadDisponible` del producto y se registra `fecha_recepcion`. Si se actualiza una orden ya recibida, se revierte el ajuste de las líneas viejas y se aplica el de las nuevas, sin modificar `fecha_recepcion`; al eliminar una recibida, se revierte el stock. El estado inicial es `PENDIENTE`.
+>
+> **Baja lógica:** `DELETE` no borra la fila ni sus líneas. Setea `orden_compra.fecha_baja` y `id_usuario_baja`; una orden dada de baja deja de aparecer en los listados y se considera inexistente para `GET /{id}`, `PUT`, `PUT /recibir` y un nuevo `DELETE`.
+>
+> La respuesta (`PurchaseOrderResponseDTO`) incluye `receptionDateTime` entre `status` y `lines`; vale `null` hasta que la orden se recibe. Las órdenes recibidas antes de la migración V5 también quedan con `receptionDateTime = null` (no se inventó un backfill).
+>
+> **Consecuencia de la baja lógica de órdenes:** como las órdenes dadas de baja conservan sus líneas, un producto o proveedor referenciado por ellas no se puede borrar físicamente (las FK de `linea_compra`/`orden_compra` no tienen cascade). Es intencional: en el paso 1B esas entidades pasan a baja lógica, por lo que el problema desaparece sin borrar historial.
 
 ## Validaciones
 

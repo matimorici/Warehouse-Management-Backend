@@ -44,6 +44,7 @@ class PurchaseOrderControllerTest {
 
     private PurchaseOrderResponseDTO response() {
         return new PurchaseOrderResponseDTO(10L, LocalDateTime.now(), 1L, "PENDIENTE",
+                LocalDateTime.of(2026, 1, 10, 9, 30),
                 List.of(new PurchaseOrderLineResponseDTO(1L, 2)));
     }
 
@@ -58,6 +59,7 @@ class PurchaseOrderControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idPurchaseOrder").value(10))
                 .andExpect(jsonPath("$.status").value("PENDIENTE"))
+                .andExpect(jsonPath("$.receptionDateTime").value("2026-01-10T09:30:00"))
                 .andExpect(jsonPath("$.lines[0].amount").value(2));
     }
 

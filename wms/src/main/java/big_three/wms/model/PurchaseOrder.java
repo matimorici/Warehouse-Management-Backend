@@ -28,6 +28,15 @@ public class PurchaseOrder {
     @Enumerated(EnumType.STRING)
     private Status status;
 
+    @Column(name = "fecha_recepcion")
+    private LocalDateTime receivedDateTime;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime deletedDateTime;
+
+    @Column(name = "id_usuario_baja")
+    private Long idDeletedByUser;
+
     public enum Status {
         PENDIENTE,
         RECIBIDA,
