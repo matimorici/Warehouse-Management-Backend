@@ -1,9 +1,14 @@
 package big_three.wms.service;
 
+import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.ProductoMasRetiradoDTO;
+import big_three.wms.dto.report.ProductoSinRotacionDTO;
 import big_three.wms.dto.report.ProductoUbicacionActualDTO;
+import big_three.wms.dto.report.RetiroPorPeriodoDTO;
 import big_three.wms.dto.report.StockBajoDTO;
 import big_three.wms.dto.report.StockPorProveedorDTO;
 import big_three.wms.dto.report.UbicacionOcupacionDTO;
+import big_three.wms.model.Role;
 import big_three.wms.repository.ReportRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -126,5 +132,249 @@ class ReportServiceTest {
         assertEquals(3L, resultado.get(0).getIdUbicacion());
         assertEquals("Galpón Oeste", resultado.get(0).getNombreUbicacion());
         assertEquals(4L, resultado.get(0).getCantidadProductos());
+    }
+
+    @Test
+    void findProductosMasRetirados_sinLimit_usaDiezYResuelveElPeriodo() {
+        ReportRepository.ProductoMasRetiradoProjection fila =
+                mock(ReportRepository.ProductoMasRetiradoProjection.class);
+        when(fila.getIdProducto()).thenReturn(1L);
+        when(fila.getNombreProducto()).thenReturn("Producto");
+        when(fila.getCodigoBarras()).thenReturn("779123");
+        when(fila.getActivo()).thenReturn(false);
+        when(fila.getUnidadesRetiradas()).thenReturn(8L);
+        when(fila.getCantidadOrdenes()).thenReturn(2L);
+        when(reportRepository.findProductosMasRetirados(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                10)).thenReturn(List.of(fila));
+
+        List<ProductoMasRetiradoDTO> resultado = reportService.findProductosMasRetirados(null, null, null);
+
+        assertEquals(1, resultado.size());
+        ProductoMasRetiradoDTO dto = resultado.get(0);
+        assertEquals(1L, dto.getIdProducto());
+        assertEquals("Producto", dto.getNombreProducto());
+        assertEquals("779123", dto.getCodigoBarras());
+        assertFalse(dto.getActivo());
+        assertEquals(8L, dto.getUnidadesRetiradas());
+        assertEquals(2L, dto.getCantidadOrdenes());
+    }
+
+    @Test
+    void findProductosMasRetirados_conLimitYFechas_pasaElRangoResuelto() {
+        when(reportRepository.findProductosMasRetirados(
+                LocalDateTime.of(2026, 3, 10, 0, 0),
+                LocalDateTime.of(2026, 3, 13, 0, 0),
+                5)).thenReturn(List.of());
+
+        assertTrue(reportService.findProductosMasRetirados(
+                LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 12), 5).isEmpty());
+    }
+
+    @Test
+    void findProductosMasRetirados_limitCero_lanzaIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reportService.findProductosMasRetirados(null, null, 0));
+
+        assertEquals("El límite debe estar entre 1 y 100", ex.getMessage());
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void findProductosMasRetirados_limitMayorACien_lanzaIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reportService.findProductosMasRetirados(null, null, 101));
+
+        assertEquals("El límite debe estar entre 1 y 100", ex.getMessage());
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void findProductosSinRotacion_sinSoloConStock_usaTrue() {
+        when(reportRepository.findProductosSinRotacion(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                true)).thenReturn(List.of());
+
+        assertTrue(reportService.findProductosSinRotacion(null, null, null).isEmpty());
+    }
+
+    @Test
+    void findProductosSinRotacion_conSoloConStockFalse_pasaFalse() {
+        when(reportRepository.findProductosSinRotacion(
+                LocalDateTime.of(2026, 3, 10, 0, 0),
+                LocalDateTime.of(2026, 3, 11, 0, 0),
+                false)).thenReturn(List.of());
+
+        assertTrue(reportService.findProductosSinRotacion(
+                LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 10), false).isEmpty());
+    }
+
+    @Test
+    void findProductosSinRotacion_mapeaLaProyeccionAlDto() {
+        LocalDateTime ultimoRetiro = LocalDateTime.of(2025, 12, 1, 9, 30);
+        ProductoSinRotacionDTO esperado = new ProductoSinRotacionDTO(
+                2L, "Sin movimiento", "779999", 4, ultimoRetiro);
+        when(reportRepository.findProductosSinRotacion(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                true)).thenReturn(List.of(esperado));
+
+        assertEquals(List.of(esperado), reportService.findProductosSinRotacion(null, null, true));
+    }
+
+    @Test
+    void findRetirosPorPeriodo_sinAgrupacion_usaDia() {
+        ReportRepository.RetiroPorPeriodoProjection fila =
+                mock(ReportRepository.RetiroPorPeriodoProjection.class);
+        LocalDate periodo = LocalDate.of(2026, 3, 10);
+        when(fila.getPeriodo()).thenReturn(periodo);
+        when(fila.getCantidadOrdenes()).thenReturn(2L);
+        when(fila.getUnidadesRetiradas()).thenReturn(7L);
+        when(reportRepository.findRetirosPorPeriodo(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                "day")).thenReturn(List.of(fila));
+
+        List<RetiroPorPeriodoDTO> resultado = reportService.findRetirosPorPeriodo(null, null, null);
+
+        assertEquals(1, resultado.size());
+        assertEquals(periodo, resultado.get(0).getPeriodo());
+        assertEquals(2L, resultado.get(0).getCantidadOrdenes());
+        assertEquals(7L, resultado.get(0).getUnidadesRetiradas());
+    }
+
+    @Test
+    void findRetirosPorPeriodo_semanaInsensibleAMayusculas_usaWeek() {
+        when(reportRepository.findRetirosPorPeriodo(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                "week")).thenReturn(List.of());
+
+        assertTrue(reportService.findRetirosPorPeriodo(null, null, "semana").isEmpty());
+    }
+
+    @Test
+    void findRetirosPorPeriodo_mes_usaMonth() {
+        when(reportRepository.findRetirosPorPeriodo(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                "month")).thenReturn(List.of());
+
+        assertTrue(reportService.findRetirosPorPeriodo(null, null, "MES").isEmpty());
+    }
+
+    @Test
+    void findRetirosPorPeriodo_agrupacionInvalida_lanzaIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reportService.findRetirosPorPeriodo(null, null, "ANIO"));
+
+        assertEquals("La agrupación debe ser DIA, SEMANA o MES", ex.getMessage());
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void findActividadOperarios_combinaRetirosYMovimientosPorUsuario() {
+        LocalDateTime ultimaRetiro1 = LocalDateTime.of(2026, 3, 10, 10, 0);
+        LocalDateTime ultimaMovimiento2 = LocalDateTime.of(2026, 3, 11, 9, 0);
+        LocalDateTime ultimaRetiro4 = LocalDateTime.of(2026, 3, 10, 8, 0);
+        LocalDateTime ultimaMovimiento4 = LocalDateTime.of(2026, 3, 12, 9, 0);
+
+        ReportRepository.UsuarioActividadBaseProjection usuario1 =
+                usuario(1L, "Ana", "Alvarez", "20-11111111-1", "OPERARIO", true);
+        ReportRepository.UsuarioActividadBaseProjection usuario2 =
+                usuario(2L, "Beto", "Benitez", "20-22222222-2", "ADMINISTRADOR", true);
+        ReportRepository.UsuarioActividadBaseProjection usuario3 =
+                usuario(3L, "Carla", "Costa", "20-33333333-3", "OPERARIO", false);
+        ReportRepository.UsuarioActividadBaseProjection usuario4 =
+                usuario(4L, "Diego", "Diaz", "20-44444444-4", "OPERARIO", true);
+
+        ReportRepository.RetirosUsuarioProjection retiros1 =
+                retiros(1L, 2L, 5L, ultimaRetiro1);
+        ReportRepository.RetirosUsuarioProjection retiros4 =
+                retiros(4L, 1L, 2L, ultimaRetiro4);
+        ReportRepository.MovimientosUsuarioProjection movimientos2 =
+                movimientos(2L, 3L, ultimaMovimiento2);
+        ReportRepository.MovimientosUsuarioProjection movimientos4 =
+                movimientos(4L, 1L, ultimaMovimiento4);
+
+        when(reportRepository.findUsuariosActividad())
+                .thenReturn(List.of(usuario1, usuario2, usuario3, usuario4));
+        when(reportRepository.findRetirosPorUsuario(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0)))
+                .thenReturn(List.of(retiros1, retiros4));
+        when(reportRepository.findMovimientosPorUsuario(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0)))
+                .thenReturn(List.of(movimientos2, movimientos4));
+
+        List<ActividadOperarioDTO> resultado = reportService.findActividadOperarios(null, null);
+
+        assertEquals(4, resultado.size());
+        assertEquals(List.of(2L, 1L, 4L, 3L),
+                resultado.stream().map(ActividadOperarioDTO::getIdUsuario).toList());
+
+        ActividadOperarioDTO soloRetiros = resultado.get(1);
+        assertEquals(2L, soloRetiros.getCantidadRetiros());
+        assertEquals(5L, soloRetiros.getUnidadesRetiradas());
+        assertEquals(0L, soloRetiros.getCantidadMovimientos());
+        assertEquals(ultimaRetiro1, soloRetiros.getUltimaActividad());
+        assertTrue(soloRetiros.getActivo());
+        assertEquals(Role.OPERARIO, soloRetiros.getRol());
+
+        ActividadOperarioDTO soloMovimientos = resultado.get(0);
+        assertEquals(0L, soloMovimientos.getCantidadRetiros());
+        assertEquals(0L, soloMovimientos.getUnidadesRetiradas());
+        assertEquals(3L, soloMovimientos.getCantidadMovimientos());
+        assertEquals(ultimaMovimiento2, soloMovimientos.getUltimaActividad());
+
+        ActividadOperarioDTO ambos = resultado.get(2);
+        assertEquals(1L, ambos.getCantidadRetiros());
+        assertEquals(2L, ambos.getUnidadesRetiradas());
+        assertEquals(1L, ambos.getCantidadMovimientos());
+        assertEquals(ultimaMovimiento4, ambos.getUltimaActividad());
+
+        ActividadOperarioDTO sinActividad = resultado.get(3);
+        assertEquals(0L, sinActividad.getCantidadRetiros());
+        assertEquals(0L, sinActividad.getUnidadesRetiradas());
+        assertEquals(0L, sinActividad.getCantidadMovimientos());
+        assertNull(sinActividad.getUltimaActividad());
+        assertFalse(sinActividad.getActivo());
+    }
+
+    private ReportRepository.UsuarioActividadBaseProjection usuario(
+            Long id, String nombre, String apellido, String cuil, String rol, boolean activo) {
+        ReportRepository.UsuarioActividadBaseProjection fila =
+                mock(ReportRepository.UsuarioActividadBaseProjection.class);
+        when(fila.getIdUsuario()).thenReturn(id);
+        when(fila.getNombre()).thenReturn(nombre);
+        when(fila.getApellido()).thenReturn(apellido);
+        when(fila.getCuil()).thenReturn(cuil);
+        when(fila.getRol()).thenReturn(rol);
+        when(fila.getActivo()).thenReturn(activo);
+        return fila;
+    }
+
+    private ReportRepository.RetirosUsuarioProjection retiros(
+            Long id, Long cantidadRetiros, Long unidadesRetiradas, LocalDateTime ultimaActividad) {
+        ReportRepository.RetirosUsuarioProjection fila =
+                mock(ReportRepository.RetirosUsuarioProjection.class);
+        when(fila.getIdUsuario()).thenReturn(id);
+        when(fila.getCantidadRetiros()).thenReturn(cantidadRetiros);
+        when(fila.getUnidadesRetiradas()).thenReturn(unidadesRetiradas);
+        when(fila.getUltimaActividad()).thenReturn(ultimaActividad);
+        return fila;
+    }
+
+    private ReportRepository.MovimientosUsuarioProjection movimientos(
+            Long id, Long cantidadMovimientos, LocalDateTime ultimaActividad) {
+        ReportRepository.MovimientosUsuarioProjection fila =
+                mock(ReportRepository.MovimientosUsuarioProjection.class);
+        when(fila.getIdUsuario()).thenReturn(id);
+        when(fila.getCantidadMovimientos()).thenReturn(cantidadMovimientos);
+        when(fila.getUltimaActividad()).thenReturn(ultimaActividad);
+        return fila;
     }
 }

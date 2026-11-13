@@ -193,7 +193,11 @@ wms/src/main/java/big_three/wms/
 │   ├── UserCreateDTO.java
 │   ├── UserResponseDTO.java
 │   └── report/
+│       ├── ActividadOperarioDTO.java
+│       ├── ProductoMasRetiradoDTO.java
+│       ├── ProductoSinRotacionDTO.java
 │       ├── ProductoUbicacionActualDTO.java
+│       ├── RetiroPorPeriodoDTO.java
 │       ├── StockBajoDTO.java
 │       ├── StockPorProveedorDTO.java
 │       └── UbicacionOcupacionDTO.java
@@ -228,6 +232,7 @@ wms/src/main/java/big_three/wms/
     ├── ProductService.java
     ├── ProveedorService.java
     ├── PurchaseOrderService.java
+    ├── ReportPeriod.java
     ├── ReportService.java
     ├── SupplierRatingService.java
     └── UserService.java
@@ -379,7 +384,11 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 
 ### Reportes (solo `ADMINISTRADOR`)
 
-Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. Las rutas, parámetros y campos de respuesta están en español. Las consultas se resuelven en SQL/JPQL (sin iterar entidades en Java ni N+1). Los reportes de **estado actual** excluyen productos, proveedores y ubicaciones dados de baja; los reportes **históricos por período** (próximos prompts) excluirán las órdenes dadas de baja pero incluirán productos, proveedores y usuarios dados de baja con un campo booleano `activo`.
+Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. Las rutas, parámetros y campos de respuesta están en español. Las consultas se resuelven en SQL/JPQL (sin iterar entidades en Java ni N+1).
+
+**Período compartido (`from`/`to`):** parámetros `LocalDate` con formato `yyyy-MM-dd`, opcionales. `from` es inclusivo desde las 00:00 y `to` es inclusivo hasta el final del día (internamente el límite exclusivo es el inicio del día siguiente). Sin fechas, el rango es `1970-01-01 00:00` a `9999-01-01 00:00` (exclusivo). Si `from` es posterior a `to`, responde `400` con `"La fecha 'from' no puede ser posterior a 'to'"`. La resolución vive en el record `ReportPeriod` (`service`), de modo que las consultas nunca reciben parámetros nulos.
+
+**Criterio de bajas:** los reportes históricos por período excluyen las órdenes de retiro dadas de baja (`orden_retiro.fecha_baja IS NOT NULL`). Incluyen productos y usuarios dados de baja cuando tuvieron actividad, con el campo booleano `activo` (`true` si `fecha_baja IS NULL`). Los reportes de estado actual excluyen productos, proveedores y ubicaciones dados de baja.
 
 | Método | Ruta | Parámetros | Campos de respuesta |
 |--------|------|------------|---------------------|
@@ -387,13 +396,21 @@ Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. 
 | `GET` | `/api/reportes/stock-por-proveedor` | — | `idProveedor`, `razonSocial`, `cantidadProductos`, `unidadesDisponibles`, `unidadesPendientes` |
 | `GET` | `/api/reportes/productos/ubicacion-actual` | `soloSinUbicar` (booleano, opcional, por defecto `false`) | `idProducto`, `nombreProducto`, `codigoBarras`, `idUbicacion`, `nombreUbicacion`, `fechaUltimoMovimiento` |
 | `GET` | `/api/reportes/ubicaciones/ocupacion` | — | `idUbicacion`, `nombreUbicacion`, `cantidadProductos` |
+| `GET` | `/api/reportes/productos/mas-retirados` | `from`, `to`, `limit` (entero, opcional, por defecto `10`, entre `1` y `100`) | `idProducto`, `nombreProducto`, `codigoBarras`, `activo`, `unidadesRetiradas`, `cantidadOrdenes` |
+| `GET` | `/api/reportes/productos/sin-rotacion` | `from`, `to`, `soloConStock` (booleano, opcional, por defecto `true`) | `idProducto`, `nombreProducto`, `codigoBarras`, `cantidadDisponible`, `ultimoRetiro` |
+| `GET` | `/api/reportes/retiros/por-periodo` | `from`, `to`, `agrupacion` (`DIA`/`SEMANA`/`MES`, opcional, por defecto `DIA`) | `periodo`, `cantidadOrdenes`, `unidadesRetiradas` |
+| `GET` | `/api/reportes/operarios/actividad` | `from`, `to` | `idUsuario`, `nombre`, `apellido`, `cuil`, `rol`, `activo`, `cantidadRetiros`, `unidadesRetiradas`, `cantidadMovimientos`, `ultimaActividad` |
 
 - **Stock bajo:** productos activos con `cantidadDisponible <= umbral`, incluidos los de stock 0. Un producto sin fila de `stock` cuenta como 0. Orden: `cantidadDisponible` ascendente y luego `nombreProducto`. Si `umbral` es negativo responde `400` con `"El umbral no puede ser negativo"`.
 - **Stock por proveedor:** incluye todos los proveedores activos, incluso los que no tienen productos (con ceros). Solo cuenta productos activos. **El schema no tiene precios**, por eso el reporte mide unidades, no dinero. Orden: `unidadesDisponibles` descendente y luego `razonSocial`.
 - **Ubicación actual:** para cada producto activo, la ubicación es `id_ubicacion_hasta` de su último `movimiento_fisico`. Los productos que nunca se movieron aparecen con `idUbicacion`, `nombreUbicacion` y `fechaUltimoMovimiento` en `null`; `soloSinUbicar=true` devuelve solo esos. Si el último movimiento apunta a una ubicación dada de baja, la ubicación se muestra en `null` pero `fechaUltimoMovimiento` se conserva (el producto no se considera "sin ubicar" porque sí tuvo movimiento). Orden: `nombreUbicacion` (nulls al final) y luego `nombreProducto`.
 - **Ocupación:** incluye todas las ubicaciones activas, incluso las vacías. `cantidadProductos` cuenta productos activos **distintos** cuya ubicación actual es esa. Orden: `cantidadProductos` descendente y luego `nombreUbicacion`.
 - **Limitación de ocupación:** el stock no está dividido por ubicación y los movimientos físicos no mueven cantidades, por lo que el reporte cuenta productos distintos, no unidades.
-- Un parámetro con tipo inválido (por ejemplo `umbral=abc`) responde `400` con `{"error": "El parámetro 'umbral' tiene un valor inválido"}`.
+- **Productos más retirados:** top de productos por unidades retiradas en el período, contando solo órdenes de retiro activas. `unidadesRetiradas` suma `linea_retiro.cantidad` y `cantidadOrdenes` cuenta órdenes distintas. Incluye productos dados de baja que tuvieron retiros, con `activo=false`. Solo aparecen productos con al menos un retiro en el período. Orden: `unidadesRetiradas` descendente y luego `nombreProducto`. `limit` fuera del rango `1..100` responde `400` con `"El límite debe estar entre 1 y 100"`.
+- **Productos sin rotación:** productos activos sin ningún retiro activo en el período. `soloConStock=true` (default) limita a productos con `cantidadDisponible > 0`, el "stock muerto" que interesa al administrador. `ultimoRetiro` es la fecha del último retiro activo del producto **sin limitar por período** (`null` si nunca se retiró). Orden: `cantidadDisponible` descendente y luego `nombreProducto`.
+- **Retiros por período:** serie temporal sobre órdenes de retiro activas. `agrupacion` es insensible a mayúsculas y se valida en el service (`DIA`, `SEMANA`, `MES`; otro valor responde `400` con `"La agrupación debe ser DIA, SEMANA o MES"`). El SQL usa `date_trunc` con un valor de la lista blanca (`day`/`week`/`month`), nunca el texto del cliente. **`SEMANA` usa la semana ISO: empieza el lunes**, comportamiento de `date_trunc('week')` de PostgreSQL. Solo se devuelven los buckets con datos; el relleno de ceros queda para el frontend. Orden: `periodo` ascendente.
+- **Actividad de operarios:** incluye todos los usuarios, también los que no tuvieron actividad (con ceros) y los dados de baja (`activo=false`). `cantidadRetiros` cuenta órdenes de retiro activas; `unidadesRetiradas` suma sus líneas; `cantidadMovimientos` cuenta filas de `movimiento_fisico`; `ultimaActividad` es la máxima fecha entre retiros y movimientos **dentro del período** (`null` si no hubo). Para evitar el producto cartesiano, los retiros y los movimientos se agregan en consultas separadas y se combinan por `idUsuario` en el service. Orden: `(cantidadRetiros + cantidadMovimientos)` descendente, apellido, nombre. El DTO no expone la contraseña ni su hash.
+- Un parámetro con tipo inválido (por ejemplo `umbral=abc` o `from=abc`) responde `400` con `{"error": "El parámetro '<nombre>' tiene un valor inválido"}`.
 
 ## Validaciones
 
