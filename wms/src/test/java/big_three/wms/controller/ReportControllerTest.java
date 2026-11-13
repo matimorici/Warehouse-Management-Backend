@@ -2,9 +2,11 @@ package big_three.wms.controller;
 
 import big_three.wms.config.SecurityConfig;
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
 import big_three.wms.dto.report.ProductoUbicacionActualDTO;
+import big_three.wms.dto.report.ProveedorRankingDTO;
 import big_three.wms.dto.report.RetiroPorPeriodoDTO;
 import big_three.wms.dto.report.StockBajoDTO;
 import big_three.wms.dto.report.StockPorProveedorDTO;
@@ -257,6 +259,84 @@ class ReportControllerTest {
     @Test
     void operariosActividad_malformedTo_returns400WithParameterName() throws Exception {
         mockMvc.perform(get("/api/reportes/operarios/actividad").param("to", "2026-13-40"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("El parámetro 'to' tiene un valor inválido"));
+    }
+
+    @Test
+    void ordenesCompraResumen_returns200WithFields() throws Exception {
+        when(reportService.findOrdenesCompraResumen(null, null)).thenReturn(List.of(
+                new OrdenCompraResumenDTO(1L, "Proveedor", true, 2L, 3L, 0L, 25L, 10L)));
+
+        mockMvc.perform(get("/api/reportes/ordenes-compra/resumen"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idProveedor").value(1))
+                .andExpect(jsonPath("$[0].razonSocial").value("Proveedor"))
+                .andExpect(jsonPath("$[0].activo").value(true))
+                .andExpect(jsonPath("$[0].ordenesPendientes").value(2))
+                .andExpect(jsonPath("$[0].ordenesRecibidas").value(3))
+                .andExpect(jsonPath("$[0].ordenesCanceladas").value(0))
+                .andExpect(jsonPath("$[0].unidadesPedidas").value(25))
+                .andExpect(jsonPath("$[0].unidadesRecibidas").value(10));
+    }
+
+    @Test
+    void ordenesCompraResumen_fromAfterTo_returns400() throws Exception {
+        when(reportService.findOrdenesCompraResumen(
+                LocalDate.of(2026, 3, 12), LocalDate.of(2026, 3, 10)))
+                .thenThrow(new IllegalArgumentException(
+                        "La fecha 'from' no puede ser posterior a 'to'"));
+
+        mockMvc.perform(get("/api/reportes/ordenes-compra/resumen")
+                        .param("from", "2026-03-12")
+                        .param("to", "2026-03-10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error")
+                        .value("La fecha 'from' no puede ser posterior a 'to'"));
+    }
+
+    @Test
+    void ordenesCompraResumen_malformedFrom_returns400WithParameterName() throws Exception {
+        mockMvc.perform(get("/api/reportes/ordenes-compra/resumen").param("from", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("El parámetro 'from' tiene un valor inválido"));
+    }
+
+    @Test
+    void proveedoresRanking_returns200WithFields() throws Exception {
+        when(reportService.findProveedoresRanking(null, null)).thenReturn(List.of(
+                new ProveedorRankingDTO(1L, "Proveedor", false, 2L, 4.5, 3L, 2.35, 1L)));
+
+        mockMvc.perform(get("/api/reportes/proveedores/ranking"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idProveedor").value(1))
+                .andExpect(jsonPath("$[0].razonSocial").value("Proveedor"))
+                .andExpect(jsonPath("$[0].activo").value(false))
+                .andExpect(jsonPath("$[0].cantidadValoraciones").value(2))
+                .andExpect(jsonPath("$[0].promedioTiempoEntregaValorado").value(4.5))
+                .andExpect(jsonPath("$[0].ordenesRecibidas").value(3))
+                .andExpect(jsonPath("$[0].promedioDiasRecepcion").value(2.35))
+                .andExpect(jsonPath("$[0].recibidasSinFecha").value(1));
+    }
+
+    @Test
+    void proveedoresRanking_fromAfterTo_returns400() throws Exception {
+        when(reportService.findProveedoresRanking(
+                LocalDate.of(2026, 3, 12), LocalDate.of(2026, 3, 10)))
+                .thenThrow(new IllegalArgumentException(
+                        "La fecha 'from' no puede ser posterior a 'to'"));
+
+        mockMvc.perform(get("/api/reportes/proveedores/ranking")
+                        .param("from", "2026-03-12")
+                        .param("to", "2026-03-10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error")
+                        .value("La fecha 'from' no puede ser posterior a 'to'"));
+    }
+
+    @Test
+    void proveedoresRanking_malformedTo_returns400WithParameterName() throws Exception {
+        mockMvc.perform(get("/api/reportes/proveedores/ranking").param("to", "2026-13-40"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("El parámetro 'to' tiene un valor inválido"));
     }

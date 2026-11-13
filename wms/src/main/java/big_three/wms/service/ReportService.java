@@ -1,9 +1,11 @@
 package big_three.wms.service;
 
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
 import big_three.wms.dto.report.ProductoUbicacionActualDTO;
+import big_three.wms.dto.report.ProveedorRankingDTO;
 import big_three.wms.dto.report.RetiroPorPeriodoDTO;
 import big_three.wms.dto.report.StockBajoDTO;
 import big_three.wms.dto.report.StockPorProveedorDTO;
@@ -121,6 +123,98 @@ public class ReportService {
                                 Comparator.nullsLast(String::compareTo))
                         .thenComparing(ActividadOperarioDTO::getIdUsuario))
                 .toList();
+    }
+
+    public List<OrdenCompraResumenDTO> findOrdenesCompraResumen(LocalDate from, LocalDate to) {
+        ReportPeriod periodo = ReportPeriod.of(from, to);
+        return reportRepository.findOrdenesCompraResumen(
+                        periodo.from(), periodo.toExclusive())
+                .stream()
+                .map(this::convertirOrdenCompraResumen)
+                .toList();
+    }
+
+    public List<ProveedorRankingDTO> findProveedoresRanking(LocalDate from, LocalDate to) {
+        ReportPeriod periodo = ReportPeriod.of(from, to);
+
+        Map<Long, ReportRepository.ValoracionesProveedorProjection> valoraciones =
+                reportRepository.findValoracionesPorProveedor(
+                                periodo.from(), periodo.toExclusive())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                ReportRepository.ValoracionesProveedorProjection::getIdProveedor,
+                                Function.identity()));
+        Map<Long, ReportRepository.OrdenesRecibidasProveedorProjection> ordenes =
+                reportRepository.findOrdenesRecibidasPorProveedor(
+                                periodo.from(), periodo.toExclusive())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                ReportRepository.OrdenesRecibidasProveedorProjection::getIdProveedor,
+                                Function.identity()));
+
+        return reportRepository.findProveedoresRankingBase(
+                        periodo.from(), periodo.toExclusive())
+                .stream()
+                .map(proveedor -> convertirProveedorRanking(
+                        proveedor,
+                        valoraciones.get(proveedor.getIdProveedor()),
+                        ordenes.get(proveedor.getIdProveedor())))
+                .sorted(Comparator
+                        .comparing(ProveedorRankingDTO::getPromedioDiasRecepcion,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Comparator.comparingLong(
+                                (ProveedorRankingDTO dto) -> dto.getCantidadValoraciones()).reversed())
+                        .thenComparing(ProveedorRankingDTO::getRazonSocial,
+                                Comparator.nullsLast(String::compareTo))
+                        .thenComparing(ProveedorRankingDTO::getIdProveedor))
+                .toList();
+    }
+
+    private OrdenCompraResumenDTO convertirOrdenCompraResumen(
+            ReportRepository.OrdenCompraResumenProjection fila) {
+        return new OrdenCompraResumenDTO(
+                fila.getIdProveedor(),
+                fila.getRazonSocial(),
+                Boolean.TRUE.equals(fila.getActivo()),
+                fila.getOrdenesPendientes(),
+                fila.getOrdenesRecibidas(),
+                fila.getOrdenesCanceladas(),
+                fila.getUnidadesPedidas(),
+                fila.getUnidadesRecibidas());
+    }
+
+    private ProveedorRankingDTO convertirProveedorRanking(
+            ReportRepository.ProveedorRankingBaseProjection proveedor,
+            ReportRepository.ValoracionesProveedorProjection valoraciones,
+            ReportRepository.OrdenesRecibidasProveedorProjection ordenes) {
+        long cantidadValoraciones = valoraciones != null
+                ? valoraciones.getCantidadValoraciones()
+                : 0L;
+        Double promedioTiempoEntrega = valoraciones != null
+                ? valoraciones.getPromedioTiempoEntregaValorado()
+                : null;
+        long ordenesRecibidas = ordenes != null ? ordenes.getOrdenesRecibidas() : 0L;
+        Double promedioDiasRecepcion = ordenes != null
+                ? redondear2(ordenes.getPromedioDiasRecepcion())
+                : null;
+        long recibidasSinFecha = ordenes != null ? ordenes.getRecibidasSinFecha() : 0L;
+
+        return new ProveedorRankingDTO(
+                proveedor.getIdProveedor(),
+                proveedor.getRazonSocial(),
+                Boolean.TRUE.equals(proveedor.getActivo()),
+                cantidadValoraciones,
+                promedioTiempoEntrega,
+                ordenesRecibidas,
+                promedioDiasRecepcion,
+                recibidasSinFecha);
+    }
+
+    private Double redondear2(Double valor) {
+        if (valor == null) {
+            return null;
+        }
+        return Math.round(valor * 100.0) / 100.0;
     }
 
     private String normalizarAgrupacion(String agrupacion) {

@@ -99,6 +99,12 @@ class RoleAuthorizationTest {
             "GET,/api/reportes/operarios/actividad,ADMINISTRADOR,true",
             "GET,/api/reportes/operarios/actividad,OPERARIO,false",
             "GET,/api/reportes/operarios/actividad,ANONIMO,false",
+            "GET,/api/reportes/ordenes-compra/resumen,ADMINISTRADOR,true",
+            "GET,/api/reportes/ordenes-compra/resumen,OPERARIO,false",
+            "GET,/api/reportes/ordenes-compra/resumen,ANONIMO,false",
+            "GET,/api/reportes/proveedores/ranking,ADMINISTRADOR,true",
+            "GET,/api/reportes/proveedores/ranking,OPERARIO,false",
+            "GET,/api/reportes/proveedores/ranking,ANONIMO,false",
             "GET,/api/ubicaciones,ANONIMO,false",
             "GET,/api/ruta-inexistente,ANONIMO,false",
             "POST,/api/auth/login,ANONIMO,true"

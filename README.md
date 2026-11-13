@@ -163,6 +163,7 @@ wms/src/main/java/big_three/wms/
 ├── controller/
 │   ├── AuthController.java          # Login
 │   ├── LocationController.java      # CRUD ubicaciones
+│   ├── PhysicalMovementController.java # Movimientos físicos (append-only)
 │   ├── PickOrderController.java     # CRUD órdenes de retiro
 │   ├── ProductController.java       # CRUD productos + stock
 │   ├── ProveedorController.java     # CRUD proveedores
@@ -174,6 +175,8 @@ wms/src/main/java/big_three/wms/
 │   ├── LocationCreateDTO.java
 │   ├── LocationResponseDTO.java
 │   ├── LoginRequestDTO.java
+│   ├── PhysicalMovementCreateDTO.java
+│   ├── PhysicalMovementResponseDTO.java
 │   ├── PickOrderCreateDTO.java
 │   ├── PickOrderLineCreateDTO.java
 │   ├── PickOrderLineResponseDTO.java
@@ -194,9 +197,11 @@ wms/src/main/java/big_three/wms/
 │   ├── UserResponseDTO.java
 │   └── report/
 │       ├── ActividadOperarioDTO.java
+│       ├── OrdenCompraResumenDTO.java
 │       ├── ProductoMasRetiradoDTO.java
 │       ├── ProductoSinRotacionDTO.java
 │       ├── ProductoUbicacionActualDTO.java
+│       ├── ProveedorRankingDTO.java
 │       ├── RetiroPorPeriodoDTO.java
 │       ├── StockBajoDTO.java
 │       ├── StockPorProveedorDTO.java
@@ -205,6 +210,7 @@ wms/src/main/java/big_three/wms/
 │   └── InvalidCredentialsException.java
 ├── model/
 │   ├── Location.java               # Ubicación
+│   ├── PhysicalMovement.java       # Movimiento físico (append-only)
 │   ├── PickOrder.java               # Orden de retiro
 │   ├── PickOrderLine.java           # Línea de orden de retiro (composite PK)
 │   ├── Product.java                 # Producto (enum OrigenCodigoBarras)
@@ -216,6 +222,7 @@ wms/src/main/java/big_three/wms/
 │   └── User.java                    # Usuario
 ├── repository/
 │   ├── LocationRepository.java
+│   ├── PhysicalMovementRepository.java
 │   ├── PickOrderLineRepository.java
 │   ├── PickOrderRepository.java
 │   ├── ProductRepository.java
@@ -227,7 +234,9 @@ wms/src/main/java/big_three/wms/
 │   ├── SupplierRatingRepository.java
 │   └── UserRepository.java
 └── service/
+    ├── BarcodeService.java
     ├── LocationService.java
+    ├── PhysicalMovementService.java
     ├── PickOrderService.java
     ├── ProductService.java
     ├── ProveedorService.java
@@ -237,6 +246,8 @@ wms/src/main/java/big_three/wms/
     ├── SupplierRatingService.java
     └── UserService.java
 ```
+
+Conteos actuales: 11 entidades, 10 controllers, 23 DTOs de API + 10 DTOs de reportes, 12 repositorios y 11 archivos en `service/` (10 services + `ReportPeriod`).
 
 ## Entidades
 
@@ -252,6 +263,7 @@ wms/src/main/java/big_three/wms/
 | **PurchaseOrder** | `orden_compra` | Orden de compra a un proveedor. Tiene estado (`PENDIENTE`/`RECIBIDA`/`CANCELADA`), fecha/hora y una o más líneas. |
 | **PurchaseOrderLine** | `linea_compra` | Línea de una orden de compra. PK compuesta: `id_orden_compra` + `id_producto`. Cantidad. |
 | **SupplierRating** | `valoracion_proveedor` | Valoración de un proveedor (tiempo de entrega, forma de entrega, relación precio/calidad). Asociada a un proveedor por `id_supplier` (raw Long). |
+| **PhysicalMovement** | `movimiento_fisico` | Evento append-only de movimiento de un producto entre ubicaciones. PK compuesta: `id_producto` + `fecha_hora`. |
 
 ## API REST
 
@@ -388,7 +400,7 @@ Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. 
 
 **Período compartido (`from`/`to`):** parámetros `LocalDate` con formato `yyyy-MM-dd`, opcionales. `from` es inclusivo desde las 00:00 y `to` es inclusivo hasta el final del día (internamente el límite exclusivo es el inicio del día siguiente). Sin fechas, el rango es `1970-01-01 00:00` a `9999-01-01 00:00` (exclusivo). Si `from` es posterior a `to`, responde `400` con `"La fecha 'from' no puede ser posterior a 'to'"`. La resolución vive en el record `ReportPeriod` (`service`), de modo que las consultas nunca reciben parámetros nulos.
 
-**Criterio de bajas:** los reportes históricos por período excluyen las órdenes de retiro dadas de baja (`orden_retiro.fecha_baja IS NOT NULL`). Incluyen productos y usuarios dados de baja cuando tuvieron actividad, con el campo booleano `activo` (`true` si `fecha_baja IS NULL`). Los reportes de estado actual excluyen productos, proveedores y ubicaciones dados de baja.
+**Criterio de bajas:** los reportes históricos por período excluyen las órdenes de retiro y de compra dadas de baja (`fecha_baja IS NOT NULL`). Incluyen productos, usuarios y proveedores dados de baja cuando tuvieron actividad, con el campo booleano `activo` (`true` si `fecha_baja IS NULL`). Los proveedores activos aparecen siempre, aunque no tengan actividad; los dados de baja solo cuando la tuvieron en el período. Los reportes de estado actual excluyen productos, proveedores y ubicaciones dados de baja.
 
 | Método | Ruta | Parámetros | Campos de respuesta |
 |--------|------|------------|---------------------|
@@ -400,6 +412,8 @@ Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. 
 | `GET` | `/api/reportes/productos/sin-rotacion` | `from`, `to`, `soloConStock` (booleano, opcional, por defecto `true`) | `idProducto`, `nombreProducto`, `codigoBarras`, `cantidadDisponible`, `ultimoRetiro` |
 | `GET` | `/api/reportes/retiros/por-periodo` | `from`, `to`, `agrupacion` (`DIA`/`SEMANA`/`MES`, opcional, por defecto `DIA`) | `periodo`, `cantidadOrdenes`, `unidadesRetiradas` |
 | `GET` | `/api/reportes/operarios/actividad` | `from`, `to` | `idUsuario`, `nombre`, `apellido`, `cuil`, `rol`, `activo`, `cantidadRetiros`, `unidadesRetiradas`, `cantidadMovimientos`, `ultimaActividad` |
+| `GET` | `/api/reportes/ordenes-compra/resumen` | `from`, `to` | `idProveedor`, `razonSocial`, `activo`, `ordenesPendientes`, `ordenesRecibidas`, `ordenesCanceladas`, `unidadesPedidas`, `unidadesRecibidas` |
+| `GET` | `/api/reportes/proveedores/ranking` | `from`, `to` | `idProveedor`, `razonSocial`, `activo`, `cantidadValoraciones`, `promedioTiempoEntregaValorado`, `ordenesRecibidas`, `promedioDiasRecepcion`, `recibidasSinFecha` |
 
 - **Stock bajo:** productos activos con `cantidadDisponible <= umbral`, incluidos los de stock 0. Un producto sin fila de `stock` cuenta como 0. Orden: `cantidadDisponible` ascendente y luego `nombreProducto`. Si `umbral` es negativo responde `400` con `"El umbral no puede ser negativo"`.
 - **Stock por proveedor:** incluye todos los proveedores activos, incluso los que no tienen productos (con ceros). Solo cuenta productos activos. **El schema no tiene precios**, por eso el reporte mide unidades, no dinero. Orden: `unidadesDisponibles` descendente y luego `razonSocial`.
@@ -410,7 +424,20 @@ Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. 
 - **Productos sin rotación:** productos activos sin ningún retiro activo en el período. `soloConStock=true` (default) limita a productos con `cantidadDisponible > 0`, el "stock muerto" que interesa al administrador. `ultimoRetiro` es la fecha del último retiro activo del producto **sin limitar por período** (`null` si nunca se retiró). Orden: `cantidadDisponible` descendente y luego `nombreProducto`.
 - **Retiros por período:** serie temporal sobre órdenes de retiro activas. `agrupacion` es insensible a mayúsculas y se valida en el service (`DIA`, `SEMANA`, `MES`; otro valor responde `400` con `"La agrupación debe ser DIA, SEMANA o MES"`). El SQL usa `date_trunc` con un valor de la lista blanca (`day`/`week`/`month`), nunca el texto del cliente. **`SEMANA` usa la semana ISO: empieza el lunes**, comportamiento de `date_trunc('week')` de PostgreSQL. Solo se devuelven los buckets con datos; el relleno de ceros queda para el frontend. Orden: `periodo` ascendente.
 - **Actividad de operarios:** incluye todos los usuarios, también los que no tuvieron actividad (con ceros) y los dados de baja (`activo=false`). `cantidadRetiros` cuenta órdenes de retiro activas; `unidadesRetiradas` suma sus líneas; `cantidadMovimientos` cuenta filas de `movimiento_fisico`; `ultimaActividad` es la máxima fecha entre retiros y movimientos **dentro del período** (`null` si no hubo). Para evitar el producto cartesiano, los retiros y los movimientos se agregan en consultas separadas y se combinan por `idUsuario` en el service. Orden: `(cantidadRetiros + cantidadMovimientos)` descendente, apellido, nombre. El DTO no expone la contraseña ni su hash.
+- **Resumen de órdenes de compra:** una fila por proveedor activo, más los proveedores dados de baja que tengan órdenes en el período. El período filtra por `orden_compra.fecha_hora` y excluye las órdenes de compra dadas de baja. `ordenesPendientes`, `ordenesRecibidas` y `ordenesCanceladas` cuentan órdenes **distintas** por estado (para que el join con las líneas no las multiplique); `unidadesPedidas` suma `linea_compra.cantidad` de órdenes `PENDIENTE` y `RECIBIDA`, y `unidadesRecibidas` solo de las `RECIBIDA`. Los proveedores sin órdenes aparecen con ceros. Orden: `unidadesPedidas` descendente y luego `razonSocial`. **Limitación:** hoy no existe un endpoint para cancelar órdenes de compra, por lo que `ordenesCanceladas` será `0` hasta que ese flujo exista.
+- **Ranking de proveedores:** incluye todos los proveedores activos (con ceros si no tuvieron actividad) y los dados de baja solo si tuvieron valoraciones u órdenes recibidas en el período. `cantidadValoraciones` y `promedioTiempoEntregaValorado` filtran por `valoracion_proveedor.fecha_hora`; `promedioTiempoEntregaValorado` ignora valores `NULL` y queda `null` si no hay datos. `ordenesRecibidas` cuenta órdenes `RECIBIDA` activas con `fecha_recepcion` **dentro del período**; `promedioDiasRecepcion` promedia `fecha_recepcion - fecha_hora` en días sobre esas mismas órdenes, redondeado a 2 decimales (`null` si no hay). `recibidasSinFecha` cuenta órdenes `RECIBIDA` activas con `fecha_recepcion IS NULL` **sin filtro de período**: es un indicador de calidad de datos de las órdenes históricas anteriores a la migración que agregó la columna. Para evitar el producto cartesiano, valoraciones y órdenes se agregan en consultas separadas y se combinan por `idProveedor` en el service. Orden: `promedioDiasRecepcion` ascendente con `null` al final, luego `cantidadValoraciones` descendente y `razonSocial`. `relacion_precio_calidad` es texto libre y no se agrega.
 - Un parámetro con tipo inválido (por ejemplo `umbral=abc` o `from=abc`) responde `400` con `{"error": "El parámetro '<nombre>' tiene un valor inválido"}`.
+
+#### Limitaciones conocidas
+
+- El schema no tiene precios: los reportes de stock miden unidades, no dinero.
+- La ocupación cuenta productos distintos, no unidades, porque el stock no está dividido por ubicación y los movimientos físicos no mueven cantidades.
+- `cantidad_pendiente` solo crece: no hay un flujo para confirmar o despachar retiros que la reduzca.
+- No hay endpoint para cancelar órdenes de compra; `ordenesCanceladas` queda en `0` hasta que exista.
+- Las órdenes `RECIBIDA` anteriores a la migración V5 tienen `fecha_recepcion = NULL`; se cuentan en `recibidasSinFecha` y no en `promedioDiasRecepcion` (no se inventó un backfill).
+- `SEMANA` en `retiros/por-periodo` usa la semana ISO: empieza el lunes (`date_trunc('week')` de PostgreSQL).
+- Una sesión abierta antes de dar de baja a un usuario sigue válida hasta expirar (90 minutos); no se invalidan sesiones al dar de baja.
+- No hay reactivación de registros dados de baja: el CUIL, el CUIT y el código de barras siguen siendo únicos a nivel global, por lo que esos valores quedan bloqueados para un registro nuevo.
 
 ## Validaciones
 
