@@ -8,6 +8,7 @@ import big_three.wms.service.ProductService;
 import big_three.wms.service.BarcodeService;
 import big_three.wms.service.ProveedorService;
 import big_three.wms.service.PurchaseOrderService;
+import big_three.wms.service.ReportService;
 import big_three.wms.service.SupplierRatingService;
 import big_three.wms.service.UserService;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,6 +45,7 @@ class RoleAuthorizationTest {
     @MockitoBean private BarcodeService barcodeService;
     @MockitoBean private ProveedorService proveedorService;
     @MockitoBean private PurchaseOrderService purchaseOrderService;
+    @MockitoBean private ReportService reportService;
     @MockitoBean private SupplierRatingService supplierRatingService;
     @MockitoBean private UserDetailsService userDetailsService;
 
@@ -73,6 +75,18 @@ class RoleAuthorizationTest {
             "GET,/api/movimientos-fisicos,OPERARIO,true",
             "GET,/api/productos,ADMINISTRADOR,true",
             "GET,/api/productos,ANONIMO,false",
+            "GET,/api/reportes/stock-bajo,ADMINISTRADOR,true",
+            "GET,/api/reportes/stock-bajo,OPERARIO,false",
+            "GET,/api/reportes/stock-bajo,ANONIMO,false",
+            "GET,/api/reportes/stock-por-proveedor,ADMINISTRADOR,true",
+            "GET,/api/reportes/stock-por-proveedor,OPERARIO,false",
+            "GET,/api/reportes/stock-por-proveedor,ANONIMO,false",
+            "GET,/api/reportes/productos/ubicacion-actual,ADMINISTRADOR,true",
+            "GET,/api/reportes/productos/ubicacion-actual,OPERARIO,false",
+            "GET,/api/reportes/productos/ubicacion-actual,ANONIMO,false",
+            "GET,/api/reportes/ubicaciones/ocupacion,ADMINISTRADOR,true",
+            "GET,/api/reportes/ubicaciones/ocupacion,OPERARIO,false",
+            "GET,/api/reportes/ubicaciones/ocupacion,ANONIMO,false",
             "GET,/api/ubicaciones,ANONIMO,false",
             "GET,/api/ruta-inexistente,ANONIMO,false",
             "POST,/api/auth/login,ANONIMO,true"
