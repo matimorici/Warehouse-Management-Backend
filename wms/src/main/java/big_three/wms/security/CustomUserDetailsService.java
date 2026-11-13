@@ -16,13 +16,14 @@ public class CustomUserDetailsService implements UserDetailsService{
     }
 
     public UserDetails loadUserByUsername(String username) {
-        User u = userRepository.findByCuilAndFechaBajaIsNull(username)
+        User u = userRepository.findByCuil(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Cuil inexistente"));
 
         UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
                 .username(u.getCuil())
                 .password(u.getContrasena())
                 .roles(u.getRol().name())
+                .disabled(u.getFechaBaja() != null)
                 .build();
 
         return userDetails;

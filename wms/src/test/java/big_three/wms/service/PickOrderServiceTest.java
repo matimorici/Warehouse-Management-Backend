@@ -85,9 +85,9 @@ class PickOrderServiceTest {
     }
 
     private void stubUserAndProductsExist() {
-        when(userRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(2L)).thenReturn(true);
+        when(userRepository.existsByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(2L)).thenReturn(true);
     }
 
     @Test
@@ -115,7 +115,7 @@ class PickOrderServiceTest {
 
     @Test
     void create_unknownUser_throws() {
-        when(userRepository.existsById(9L)).thenReturn(false);
+        when(userRepository.existsByIdUsuarioAndFechaBajaIsNull(9L)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> pickOrderService.create(orderDto(9L, line(1L, 2))));
@@ -126,8 +126,8 @@ class PickOrderServiceTest {
 
     @Test
     void create_unknownProduct_throws() {
-        when(userRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(9L)).thenReturn(false);
+        when(userRepository.existsByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(9L)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> pickOrderService.create(orderDto(1L, line(9L, 2))));
@@ -137,10 +137,33 @@ class PickOrderServiceTest {
     }
 
     @Test
+    void create_deletedUserIsTreatedAsNotFound() {
+        when(userRepository.existsByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> pickOrderService.create(orderDto(1L, line(1L, 2))));
+
+        assertEquals("Usuario no encontrado", ex.getMessage());
+        verify(pickOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedProductIsTreatedAsNotFound() {
+        when(userRepository.existsByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> pickOrderService.create(orderDto(1L, line(1L, 2))));
+
+        assertEquals("Producto no encontrado: 1", ex.getMessage());
+        verify(pickOrderRepository, never()).save(any());
+    }
+
+    @Test
     void update_reversesOldLinesAndAppliesNewDeltas() {
         when(pickOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L)));
-        when(userRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(2L)).thenReturn(true);
+        when(userRepository.existsByIdUsuarioAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(2L)).thenReturn(true);
 
         List<PickOrderLine> oldLines = List.of(savedLine(10L, 1L, 3));
         List<PickOrderLine> newLines = List.of(savedLine(10L, 2L, 4));

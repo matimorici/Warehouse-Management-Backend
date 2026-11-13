@@ -11,6 +11,7 @@ import big_three.wms.model.Stock;
 import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.ProveedorRepository;
 import big_three.wms.repository.StockRepository;
+import big_three.wms.security.CurrentUserProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -37,6 +38,9 @@ class ProductServiceTest {
 
     @Mock
     private StockRepository stockRepository;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private ProductService productService;
@@ -87,7 +91,7 @@ class ProductServiceTest {
 
     @Test
     void create_withBarcode_setsFabricanteAndStock() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.existsByCodigoBarras("779123")).thenReturn(false);
         savedProductMock(3L, "779123");
 
@@ -108,7 +112,7 @@ class ProductServiceTest {
 
     @Test
     void create_withBarcode_setsProvidedStockQuantities() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.existsByCodigoBarras("779123")).thenReturn(false);
         savedProductMock(3L, "779123");
 
@@ -120,7 +124,7 @@ class ProductServiceTest {
 
     @Test
     void create_blankBarcode_generatesInternalCode() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.obtenerSiguienteSecuencia()).thenReturn(42L);
         savedProductMock(3L, "INT-000042");
 
@@ -132,7 +136,7 @@ class ProductServiceTest {
 
     @Test
     void create_nullBarcode_generatesInternalCode() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.obtenerSiguienteSecuencia()).thenReturn(7L);
         savedProductMock(3L, "INT-000007");
 
@@ -144,7 +148,7 @@ class ProductServiceTest {
 
     @Test
     void create_duplicateBarcode_throws() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.existsByCodigoBarras("779123")).thenReturn(true);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
@@ -156,7 +160,7 @@ class ProductServiceTest {
 
     @Test
     void create_proveedorNotFound_throws() {
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.empty());
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> productService.create(dto("779123", null, null)));
@@ -171,8 +175,8 @@ class ProductServiceTest {
         existing.setCodigoBarras("old");
         existing.setOrigenCodigoBarras(OrigenCodigoBarras.INTERNO);
         existing.setProveedor(proveedor(1L));
-        when(productRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(existing));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.existsByCodigoBarras("new")).thenReturn(false);
         when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -193,8 +197,8 @@ class ProductServiceTest {
         existing.setCodigoBarras("old");
         existing.setOrigenCodigoBarras(OrigenCodigoBarras.FABRICANTE);
         existing.setProveedor(proveedor(1L));
-        when(productRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(existing));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
         when(stockRepository.save(any(Stock.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -212,8 +216,8 @@ class ProductServiceTest {
         existing.setIdProducto(1L);
         existing.setCodigoBarras("old");
         existing.setProveedor(proveedor(1L));
-        when(productRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(existing));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(productRepository.existsByCodigoBarras("taken")).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> productService.update(1L, dto("taken", null, null)));
@@ -226,8 +230,8 @@ class ProductServiceTest {
         existing.setIdProducto(1L);
         existing.setCodigoBarras("old");
         existing.setProveedor(proveedor(1L));
-        when(productRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(proveedorRepository.findById(1L)).thenReturn(Optional.of(proveedor(1L)));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(existing));
+        when(proveedorRepository.findByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(Optional.of(proveedor(1L)));
         when(stockRepository.findById(1L)).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -241,38 +245,85 @@ class ProductServiceTest {
         assertEquals(6, response.getCantidadDisponible());
     }
 
+    private Product activeProduct(Long id) {
+        Product product = new Product();
+        product.setIdProducto(id);
+        product.setCodigoBarras("779123");
+        product.setProveedor(proveedor(1L));
+        product.setOrigenCodigoBarras(OrigenCodigoBarras.FABRICANTE);
+        return product;
+    }
+
     @Test
     void deleteById_notFound_throws() {
-        when(productRepository.existsById(99L)).thenReturn(false);
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> productService.deleteById(99L));
+        verify(productRepository, never()).save(any());
         verify(productRepository, never()).deleteById(any());
     }
 
     @Test
-    void deleteById_deletesProductAndStock() {
-        when(productRepository.existsById(1L)).thenReturn(true);
-        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
+    void deleteById_deletedProductIsTreatedAsNotFound() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
 
-        productService.deleteById(1L);
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> productService.deleteById(1L));
 
-        verify(stockRepository).delete(any(Stock.class));
-        verify(productRepository).deleteById(1L);
+        assertEquals("Producto no encontrado para eliminar", ex.getMessage());
+        verify(productRepository, never()).save(any());
+        verify(productRepository, never()).deleteById(any());
     }
 
     @Test
-    void deleteById_noStockRow_stillDeletesProduct() {
-        when(productRepository.existsById(1L)).thenReturn(true);
-        when(stockRepository.findById(1L)).thenReturn(Optional.empty());
+    void deleteById_withAvailableStock_throws() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(activeProduct(1L)));
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 0)));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> productService.deleteById(1L));
+
+        assertEquals("No se puede dar de baja un producto con stock disponible", ex.getMessage());
+        verify(productRepository, never()).save(any());
+        verify(productRepository, never()).deleteById(any());
+        verify(stockRepository, never()).delete(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void deleteById_withZeroAvailableStock_setsFechaBajaAndSaves() {
+        Product product = activeProduct(1L);
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(product));
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 0, 7)));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
 
         productService.deleteById(1L);
 
+        assertNotNull(product.getFechaBaja());
+        assertEquals(2L, product.getIdUsuarioBaja());
+        verify(productRepository).save(product);
+        verify(productRepository, never()).deleteById(any());
         verify(stockRepository, never()).delete(any());
-        verify(productRepository).deleteById(1L);
+    }
+
+    @Test
+    void deleteById_noStockRow_treatsStockAsZeroAndAllowsDelete() {
+        Product product = activeProduct(1L);
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(product));
+        when(stockRepository.findById(1L)).thenReturn(Optional.empty());
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
+
+        productService.deleteById(1L);
+
+        assertNotNull(product.getFechaBaja());
+        assertEquals(2L, product.getIdUsuarioBaja());
+        verify(productRepository).save(product);
+        verify(productRepository, never()).deleteById(any());
+        verify(stockRepository, never()).delete(any());
     }
 
     @Test
     void ajustarStock_appliesDeltas() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
         when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
         when(stockRepository.save(any(Stock.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -286,6 +337,7 @@ class ProductServiceTest {
 
     @Test
     void ajustarStock_negativeDisponible_throws() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
         when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 1, 0)));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> productService.ajustarStock(1L, -2, 2));
@@ -296,20 +348,46 @@ class ProductServiceTest {
 
     @Test
     void ajustarStock_missingStock_throws() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
         when(stockRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> productService.ajustarStock(1L, -1, 1));
     }
 
     @Test
+    void ajustarStock_deletedProduct_throwsProductoNoEncontrado() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> productService.ajustarStock(1L, -1, 1));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+        verify(stockRepository, never()).findById(any());
+        verify(stockRepository, never()).save(any());
+    }
+
+    @Test
     void findStockByIdProducto_missing_throws() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
         when(stockRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> productService.findStockByIdProducto(1L));
     }
 
     @Test
+    void findStockByIdProducto_deletedProduct_throws() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> productService.findStockByIdProducto(1L));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+        verify(stockRepository, never()).findById(any());
+    }
+
+    @Test
     void updateStock_appliesOnlyProvidedFields() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
         when(stockRepository.findById(1L)).thenReturn(Optional.of(stock(1L, 5, 3)));
         when(stockRepository.save(any(Stock.class))).thenAnswer(inv -> inv.getArgument(0));
         StockUpdateDTO dto = new StockUpdateDTO();
@@ -322,13 +400,19 @@ class ProductServiceTest {
     }
 
     @Test
-    void findAll_includesStock() {
-        Product product = new Product();
-        product.setIdProducto(1L);
-        product.setCodigoBarras("779123");
-        product.setProveedor(proveedor(1L));
-        product.setOrigenCodigoBarras(OrigenCodigoBarras.FABRICANTE);
-        when(productRepository.findAll()).thenReturn(List.of(product));
+    void updateStock_deletedProduct_throws() {
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> productService.updateStock(1L, new StockUpdateDTO()));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+        verify(stockRepository, never()).findById(any());
+    }
+
+    @Test
+    void findAll_includesStockAndOnlyActiveProducts() {
+        when(productRepository.findByFechaBajaIsNull()).thenReturn(List.of(activeProduct(1L)));
         when(stockRepository.findAll()).thenReturn(List.of(stock(1L, 5, 3)));
 
         List<ProductResponseDTO> response = productService.findAll();
@@ -336,13 +420,35 @@ class ProductServiceTest {
         assertEquals(1, response.size());
         assertEquals(5, response.get(0).getCantidadDisponible());
         assertEquals(3, response.get(0).getCantidadPendiente());
+        verify(productRepository).findByFechaBajaIsNull();
+        verify(productRepository, never()).findAll();
         verify(stockRepository, never()).findById(any());
     }
 
     @Test
     void findById_notFound_throws() {
-        when(productRepository.findById(1L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(99L)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> productService.findById(1L));
+        assertThrows(RuntimeException.class, () -> productService.findById(99L));
+    }
+
+    @Test
+    void findById_deletedProduct_throws() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> productService.findById(1L));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+    }
+
+    @Test
+    void update_deletedProduct_throws() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> productService.update(1L, dto(null, null, null)));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+        verify(productRepository, never()).save(any());
     }
 }

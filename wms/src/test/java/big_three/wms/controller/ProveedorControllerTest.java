@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -103,5 +104,18 @@ class ProveedorControllerTest {
         mockMvc.perform(delete("/api/proveedores/1")
                         .with(csrf()))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void delete_providerWithActiveProductsOrOrders_returns400() throws Exception {
+        doThrow(new IllegalArgumentException(
+                "No se puede dar de baja un proveedor con productos activos u órdenes pendientes"))
+                .when(proveedorService).deleteById(1L);
+
+        mockMvc.perform(delete("/api/proveedores/1")
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error")
+                        .value("No se puede dar de baja un proveedor con productos activos u órdenes pendientes"));
     }
 }

@@ -11,6 +11,7 @@ import big_three.wms.dto.StockUpdateDTO;
 import big_three.wms.repository.ProductRepository;
 import big_three.wms.repository.ProveedorRepository;
 import big_three.wms.repository.StockRepository;
+import big_three.wms.security.CurrentUserProvider;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
@@ -24,18 +25,21 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProveedorRepository proveedorRepository;
     private final StockRepository stockRepository;
+    private final CurrentUserProvider currentUserProvider;
 
     public ProductService(ProductRepository productRepository,
                           ProveedorRepository proveedorRepository,
-                          StockRepository stockRepository) {
+                          StockRepository stockRepository,
+                          CurrentUserProvider currentUserProvider) {
         this.productRepository = productRepository;
         this.proveedorRepository = proveedorRepository;
         this.stockRepository = stockRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Transactional
     public ProductResponseDTO create(ProductCreateDTO dto) {
-        Proveedor proveedor = proveedorRepository.findById(dto.getIdProveedor())
+        Proveedor proveedor = proveedorRepository.findByIdProveedorAndFechaBajaIsNull(dto.getIdProveedor())
                 .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
 
         String codigoBarras;
@@ -43,7 +47,9 @@ public class ProductService {
 
         if (dto.getCodigoBarras() != null && !dto.getCodigoBarras().isBlank()) {
             if (productRepository.existsByCodigoBarras(dto.getCodigoBarras())) {
-                throw new IllegalArgumentException("Ya existe un producto con ese código de barras: " + dto.getCodigoBarras());
+                throw new IllegalArgumentException(
+                        "Ya existe un producto con ese código de barras (puede estar dado de baja): "
+                                + dto.getCodigoBarras());
             }
             codigoBarras = dto.getCodigoBarras();
             origen = OrigenCodigoBarras.FABRICANTE;
@@ -71,15 +77,17 @@ public class ProductService {
 
     @Transactional
     public ProductResponseDTO update(Long id, ProductCreateDTO dto) {
-        Product p = productRepository.findById(id)
+        Product p = productRepository.findByIdProductoAndFechaBajaIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
-        Proveedor proveedor = proveedorRepository.findById(dto.getIdProveedor())
+        Proveedor proveedor = proveedorRepository.findByIdProveedorAndFechaBajaIsNull(dto.getIdProveedor())
                 .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
 
         if (dto.getCodigoBarras() != null && !dto.getCodigoBarras().isBlank()) {
             if (!p.getCodigoBarras().equals(dto.getCodigoBarras()) &&
                     productRepository.existsByCodigoBarras(dto.getCodigoBarras())) {
-                throw new IllegalArgumentException("Ya existe un producto con ese código de barras: " + dto.getCodigoBarras());
+                throw new IllegalArgumentException(
+                        "Ya existe un producto con ese código de barras (puede estar dado de baja): "
+                                + dto.getCodigoBarras());
             }
             p.setCodigoBarras(dto.getCodigoBarras());
             p.setOrigenCodigoBarras(OrigenCodigoBarras.FABRICANTE);
@@ -136,14 +144,14 @@ public class ProductService {
     public List<ProductResponseDTO> findAll() {
         Map<Long, Stock> stockById = stockRepository.findAll().stream()
                 .collect(Collectors.toMap(Stock::getIdProducto, stock -> stock));
-        return productRepository.findAll()
+        return productRepository.findByFechaBajaIsNull()
                 .stream()
                 .map(p -> convertToResponseDTO(p, stockById.get(p.getIdProducto())))
                 .collect(Collectors.toList());
     }
 
     public ProductResponseDTO findById(Long id) {
-        Product p = productRepository.findById(id)
+        Product p = productRepository.findByIdProductoAndFechaBajaIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
         Stock stock = stockRepository.findById(id).orElse(null);
         return convertToResponseDTO(p, stock);
@@ -151,15 +159,24 @@ public class ProductService {
 
     @Transactional
     public void deleteById(Long id) {
-        if (!productRepository.existsById(id)) {
-            throw new RuntimeException("Producto no encontrado para eliminar");
+        Product p = productRepository.findByIdProductoAndFechaBajaIsNull(id)
+                .orElseThrow(() -> new RuntimeException("Producto no encontrado para eliminar"));
+
+        Stock stock = stockRepository.findById(id).orElse(null);
+        if (stock != null && stock.getCantidadDisponible() > 0) {
+            throw new IllegalArgumentException("No se puede dar de baja un producto con stock disponible");
         }
-        stockRepository.findById(id).ifPresent(stock -> stockRepository.delete(stock));
-        productRepository.deleteById(id);
+
+        p.setFechaBaja(LocalDateTime.now());
+        p.setIdUsuarioBaja(currentUserProvider.requireCurrentUserId());
+        productRepository.save(p);
     }
 
     @Transactional
     public void ajustarStock(Long idProducto, int deltaDisponible, int deltaPendiente) {
+        if (!productRepository.existsByIdProductoAndFechaBajaIsNull(idProducto)) {
+            throw new RuntimeException("Producto no encontrado");
+        }
         Stock stock = stockRepository.findById(idProducto)
                 .orElseThrow(() -> new RuntimeException("Stock no encontrado para producto " + idProducto));
         if (stock.getCantidadDisponible() + deltaDisponible < 0) {
@@ -172,6 +189,9 @@ public class ProductService {
     }
 
     public StockResponseDTO findStockByIdProducto(Long idProducto) {
+        if (!productRepository.existsByIdProductoAndFechaBajaIsNull(idProducto)) {
+            throw new RuntimeException("Producto no encontrado");
+        }
         Stock stock = stockRepository.findById(idProducto)
                 .orElseThrow(() -> new RuntimeException("Stock no encontrado para producto " + idProducto));
         return new StockResponseDTO(stock.getIdProducto(), stock.getFechaHora(),
@@ -180,6 +200,9 @@ public class ProductService {
 
     @Transactional
     public StockResponseDTO updateStock(Long idProducto, StockUpdateDTO dto) {
+        if (!productRepository.existsByIdProductoAndFechaBajaIsNull(idProducto)) {
+            throw new RuntimeException("Producto no encontrado");
+        }
         Stock stock = stockRepository.findById(idProducto)
                 .orElseThrow(() -> new RuntimeException("Stock no encontrado para producto " + idProducto));
         if (dto.getCantidadDisponible() != null) {

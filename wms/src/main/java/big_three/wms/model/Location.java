@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "ubicacion")
 @Data
@@ -18,4 +20,10 @@ public class Location {
 
     @Column(name = "nombre_ubicacion", nullable = false, length = 100)
     private String name;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime deletedDateTime;
+
+    @Column(name = "id_usuario_baja")
+    private Long idDeletedByUser;
 }

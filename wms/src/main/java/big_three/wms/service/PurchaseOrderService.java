@@ -43,11 +43,11 @@ public class PurchaseOrderService {
 
     @Transactional
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
-        if (!proveedorRepository.existsById(dto.getIdSupplier())) {
+        if (!proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(dto.getIdSupplier())) {
             throw new RuntimeException("Proveedor no encontrado");
         }
         for (PurchaseOrderLineCreateDTO line : dto.getLines()) {
-            if (!productRepository.existsById(line.getIdProduct())) {
+            if (!productRepository.existsByIdProductoAndFechaBajaIsNull(line.getIdProduct())) {
                 throw new RuntimeException("Producto no encontrado: " + line.getIdProduct());
             }
         }
@@ -106,11 +106,11 @@ public class PurchaseOrderService {
     public PurchaseOrderResponseDTO update(Long id, PurchaseOrderCreateDTO dto) {
         PurchaseOrder purchaseOrder = findActiveOrThrow(id);
 
-        if (!proveedorRepository.existsById(dto.getIdSupplier())) {
+        if (!proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(dto.getIdSupplier())) {
             throw new RuntimeException("Proveedor no encontrado");
         }
         for (PurchaseOrderLineCreateDTO line : dto.getLines()) {
-            if (!productRepository.existsById(line.getIdProduct())) {
+            if (!productRepository.existsByIdProductoAndFechaBajaIsNull(line.getIdProduct())) {
                 throw new RuntimeException("Producto no encontrado: " + line.getIdProduct());
             }
         }

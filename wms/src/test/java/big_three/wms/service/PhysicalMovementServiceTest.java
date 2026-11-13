@@ -64,10 +64,10 @@ class PhysicalMovementServiceTest {
 
     @Test
     void create_success_returnsDto() {
-        when(productRepository.findById(1L)).thenReturn(Optional.of(new Product()));
-        when(locationRepository.findById(10L)).thenReturn(Optional.of(new Location()));
-        when(locationRepository.findById(20L)).thenReturn(Optional.of(new Location()));
-        when(userRepository.findById(30L)).thenReturn(Optional.of(new User()));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(10L)).thenReturn(Optional.of(new Location()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(20L)).thenReturn(Optional.of(new Location()));
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(30L)).thenReturn(Optional.of(new User()));
         when(movementRepository.save(any(PhysicalMovement.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PhysicalMovementResponseDTO response = movementService.create(dto());
@@ -86,7 +86,7 @@ class PhysicalMovementServiceTest {
 
     @Test
     void create_productNotFound_throws() {
-        when(productRepository.findById(1L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
@@ -96,8 +96,8 @@ class PhysicalMovementServiceTest {
 
     @Test
     void create_sourceLocationNotFound_throws() {
-        when(productRepository.findById(1L)).thenReturn(Optional.of(new Product()));
-        when(locationRepository.findById(10L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(10L)).thenReturn(Optional.empty());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
@@ -107,9 +107,9 @@ class PhysicalMovementServiceTest {
 
     @Test
     void create_withoutSourceLocation_skipsSourceValidation() {
-        when(productRepository.findById(1L)).thenReturn(Optional.of(new Product()));
-        when(locationRepository.findById(20L)).thenReturn(Optional.of(new Location()));
-        when(userRepository.findById(30L)).thenReturn(Optional.of(new User()));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(20L)).thenReturn(Optional.of(new Location()));
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(30L)).thenReturn(Optional.of(new User()));
         when(movementRepository.save(any(PhysicalMovement.class))).thenAnswer(inv -> inv.getArgument(0));
         PhysicalMovementCreateDTO dto = dto();
         dto.setIdLocationFrom(null);
@@ -117,14 +117,14 @@ class PhysicalMovementServiceTest {
         PhysicalMovementResponseDTO response = movementService.create(dto);
 
         assertNull(response.getIdLocationFrom());
-        verify(locationRepository, never()).findById(10L);
+        verify(locationRepository, never()).findByIdAndDeletedDateTimeIsNull(10L);
     }
 
     @Test
     void create_destinationLocationNotFound_throws() {
-        when(productRepository.findById(1L)).thenReturn(Optional.of(new Product()));
-        when(locationRepository.findById(10L)).thenReturn(Optional.of(new Location()));
-        when(locationRepository.findById(20L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(10L)).thenReturn(Optional.of(new Location()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(20L)).thenReturn(Optional.empty());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 
@@ -134,10 +134,45 @@ class PhysicalMovementServiceTest {
 
     @Test
     void create_userNotFound_throws() {
-        when(productRepository.findById(1L)).thenReturn(Optional.of(new Product()));
-        when(locationRepository.findById(10L)).thenReturn(Optional.of(new Location()));
-        when(locationRepository.findById(20L)).thenReturn(Optional.of(new Location()));
-        when(userRepository.findById(30L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(10L)).thenReturn(Optional.of(new Location()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(20L)).thenReturn(Optional.of(new Location()));
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(30L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
+
+        assertEquals("Usuario no encontrado", ex.getMessage());
+        verify(movementRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedProductIsTreatedAsNotFound() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+        verify(movementRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedDestinationLocationIsTreatedAsNotFound() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(10L)).thenReturn(Optional.of(new Location()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(20L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
+
+        assertEquals("Ubicación de destino no encontrada", ex.getMessage());
+        verify(movementRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedUserIsTreatedAsNotFound() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(new Product()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(10L)).thenReturn(Optional.of(new Location()));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(20L)).thenReturn(Optional.of(new Location()));
+        when(userRepository.findByIdUsuarioAndFechaBajaIsNull(30L)).thenReturn(Optional.empty());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> movementService.create(dto()));
 

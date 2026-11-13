@@ -4,6 +4,7 @@ import big_three.wms.dto.LocationCreateDTO;
 import big_three.wms.dto.LocationResponseDTO;
 import big_three.wms.model.Location;
 import big_three.wms.repository.LocationRepository;
+import big_three.wms.security.CurrentUserProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -22,6 +23,9 @@ class LocationServiceTest {
 
     @Mock
     private LocationRepository locationRepository;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private LocationService locationService;
@@ -54,25 +58,39 @@ class LocationServiceTest {
     }
 
     @Test
-    void findAll_mapsToDtos() {
-        when(locationRepository.findAll()).thenReturn(List.of(location(1L, "Galpón Oeste")));
+    void findAll_returnsOnlyActiveLocations() {
+        when(locationRepository.findByDeletedDateTimeIsNull())
+                .thenReturn(List.of(location(1L, "Galpón Oeste")));
 
         List<LocationResponseDTO> response = locationService.findAll();
 
         assertEquals(1, response.size());
         assertEquals(1L, response.get(0).getId());
         assertEquals("Galpón Oeste", response.get(0).getName());
+        verify(locationRepository).findByDeletedDateTimeIsNull();
+        verify(locationRepository, never()).findAll();
     }
 
     @Test
     void findById_notFound_throws() {
-        when(locationRepository.findById(99L)).thenReturn(Optional.empty());
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> locationService.findById(99L));
     }
+
+    @Test
+    void findById_deletedLocationIsTreatedAsNotFound() {
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> locationService.findById(1L));
+
+        assertEquals("Ubicación no encontrada", ex.getMessage());
+    }
+
     @Test
     void findById_success_returnsDto() {
-        when(locationRepository.findById(1L)).thenReturn(Optional.of(location(1L, "Galpón Oeste")));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(1L))
+                .thenReturn(Optional.of(location(1L, "Galpón Oeste")));
 
         LocationResponseDTO response = locationService.findById(1L);
 
@@ -81,7 +99,8 @@ class LocationServiceTest {
     }
     @Test
     void update_success_updatesFields() {
-        when(locationRepository.findById(1L)).thenReturn(Optional.of(location(1L, "Galpón Oeste")));
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(1L))
+                .thenReturn(Optional.of(location(1L, "Galpón Oeste")));
         when(locationRepository.save(any(Location.class))).thenAnswer(inv -> inv.getArgument(0));
 
         LocationResponseDTO response = locationService.update(1L, dto("Galpón Este"));
@@ -90,7 +109,7 @@ class LocationServiceTest {
     }
     @Test
     void update_notFound_throws() {
-        when(locationRepository.findById(99L)).thenReturn(Optional.empty());
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> locationService.update(99L, dto("Galpón Este")));
         verify(locationRepository, never()).save(any());
@@ -98,18 +117,48 @@ class LocationServiceTest {
 
     @Test
     void deleteById_notFound_throws() {
-        when(locationRepository.existsById(99L)).thenReturn(false);
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> locationService.deleteById(99L));
+        verify(locationRepository, never()).save(any());
         verify(locationRepository, never()).deleteById(any());
     }
 
     @Test
-    void deleteById_existing_deletes() {
-        when(locationRepository.existsById(1L)).thenReturn(true);
+    void deleteById_deletedLocationIsTreatedAsNotFound() {
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> locationService.deleteById(1L));
+
+        assertEquals("Ubicación no encontrada para eliminar", ex.getMessage());
+        verify(locationRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteById_locationWithActiveProducts_throws() {
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(1L))
+                .thenReturn(Optional.of(location(1L, "Galpón Oeste")));
+        when(locationRepository.existsActiveProductCurrentlyInLocation(1L)).thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> locationService.deleteById(1L));
+
+        assertEquals("No se puede dar de baja una ubicación que contiene productos", ex.getMessage());
+        verify(locationRepository, never()).save(any());
+        verify(currentUserProvider, never()).requireCurrentUserId();
+    }
+
+    @Test
+    void deleteById_emptyLocation_setsDeletedFieldsAndSaves() {
+        Location location = location(1L, "Galpón Oeste");
+        when(locationRepository.findByIdAndDeletedDateTimeIsNull(1L)).thenReturn(Optional.of(location));
+        when(currentUserProvider.requireCurrentUserId()).thenReturn(2L);
 
         locationService.deleteById(1L);
 
-        verify(locationRepository).deleteById(1L);
+        assertNotNull(location.getDeletedDateTime());
+        assertEquals(2L, location.getIdDeletedByUser());
+        verify(locationRepository).save(location);
+        verify(locationRepository, never()).deleteById(any());
     }
 }

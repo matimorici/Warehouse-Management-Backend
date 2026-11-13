@@ -28,7 +28,7 @@ public class BarcodeService {
     }
 
     public byte[] getBarcodePng(Long idProducto) {
-        Product product = productRepository.findById(idProducto)
+        Product product = productRepository.findByIdProductoAndFechaBajaIsNull(idProducto)
                 .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
 
         try {

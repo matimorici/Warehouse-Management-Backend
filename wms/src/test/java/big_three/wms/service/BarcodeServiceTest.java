@@ -33,7 +33,7 @@ class BarcodeServiceTest {
 
     @Test
     void getBarcodePng_productFound_returnsPngBytes() {
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product("779123")));
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.of(product("779123")));
 
         byte[] png = barcodeService.getBarcodePng(1L);
 
@@ -44,9 +44,18 @@ class BarcodeServiceTest {
 
     @Test
     void getBarcodePng_productNotFound_throws() {
-        when(productRepository.findById(99L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(99L)).thenReturn(Optional.empty());
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> barcodeService.getBarcodePng(99L));
+
+        assertEquals("Producto no encontrado", ex.getMessage());
+    }
+
+    @Test
+    void getBarcodePng_deletedProductIsTreatedAsNotFound() {
+        when(productRepository.findByIdProductoAndFechaBajaIsNull(1L)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> barcodeService.getBarcodePng(1L));
 
         assertEquals("Producto no encontrado", ex.getMessage());
     }

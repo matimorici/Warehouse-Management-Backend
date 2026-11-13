@@ -5,9 +5,12 @@ import big_three.wms.model.Location;
 import big_three.wms.dto.LocationCreateDTO;
 import big_three.wms.dto.LocationResponseDTO;
 import big_three.wms.repository.LocationRepository;
+import big_three.wms.security.CurrentUserProvider;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -15,9 +18,11 @@ import java.util.stream.Collectors;
 public class LocationService {
 
     private final LocationRepository locationRepository;
+    private final CurrentUserProvider currentUserProvider;
 
-    public LocationService(LocationRepository locationRepository) {
+    public LocationService(LocationRepository locationRepository, CurrentUserProvider currentUserProvider) {
         this.locationRepository = locationRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     public LocationResponseDTO create(LocationCreateDTO dto) {
@@ -28,28 +33,35 @@ public class LocationService {
     }
 
     public List<LocationResponseDTO> findAll() {
-        return locationRepository.findAll()
+        return locationRepository.findByDeletedDateTimeIsNull()
                 .stream()
                 .map(this::convertToResponseDTO)
                 .collect(Collectors.toList());
     }
     public LocationResponseDTO findById(Long id) {
-        Location l = locationRepository.findById(id)
+        Location l = locationRepository.findByIdAndDeletedDateTimeIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Ubicación no encontrada"));
         return convertToResponseDTO(l);
     }
     public LocationResponseDTO update(Long id, LocationCreateDTO dto) {
-        Location l = locationRepository.findById(id)
+        Location l = locationRepository.findByIdAndDeletedDateTimeIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Ubicación no encontrada"));
         l.setName(dto.getName());
         Location updated = locationRepository.save(l);
         return convertToResponseDTO(updated);
     }
+    @Transactional
     public void deleteById(Long id) {
-        if (!locationRepository.existsById(id)) {
-            throw new RuntimeException("Ubicación no encontrada para eliminar");
+        Location l = locationRepository.findByIdAndDeletedDateTimeIsNull(id)
+                .orElseThrow(() -> new RuntimeException("Ubicación no encontrada para eliminar"));
+
+        if (locationRepository.existsActiveProductCurrentlyInLocation(id)) {
+            throw new IllegalArgumentException("No se puede dar de baja una ubicación que contiene productos");
         }
-        locationRepository.deleteById(id);
+
+        l.setDeletedDateTime(LocalDateTime.now());
+        l.setIdDeletedByUser(currentUserProvider.requireCurrentUserId());
+        locationRepository.save(l);
     }
 
     private LocationResponseDTO convertToResponseDTO(Location location) {

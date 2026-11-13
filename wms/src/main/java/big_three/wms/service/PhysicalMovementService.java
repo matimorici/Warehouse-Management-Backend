@@ -35,16 +35,16 @@ public class PhysicalMovementService {
 
     @Transactional
     public PhysicalMovementResponseDTO create(PhysicalMovementCreateDTO dto) {
-        productRepository.findById(dto.getIdProduct())
+        productRepository.findByIdProductoAndFechaBajaIsNull(dto.getIdProduct())
                 .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado"));
         if (dto.getIdLocationFrom() != null) {
             Long idLocationFrom = dto.getIdLocationFrom();
-            locationRepository.findById(idLocationFrom)
+            locationRepository.findByIdAndDeletedDateTimeIsNull(idLocationFrom)
                     .orElseThrow(() -> new IllegalArgumentException("Ubicación de origen no encontrada"));
         }
-        locationRepository.findById(dto.getIdLocationTo())
+        locationRepository.findByIdAndDeletedDateTimeIsNull(dto.getIdLocationTo())
                 .orElseThrow(() -> new IllegalArgumentException("Ubicación de destino no encontrada"));
-        userRepository.findById(dto.getIdUser())
+        userRepository.findByIdUsuarioAndFechaBajaIsNull(dto.getIdUser())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
         PhysicalMovement movement = new PhysicalMovement();

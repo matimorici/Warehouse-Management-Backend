@@ -44,11 +44,11 @@ public class PickOrderService {
 
     @Transactional
     public PickOrderResponseDTO create(PickOrderCreateDTO dto) {
-        if (!userRepository.existsById(dto.getIdUsuario())) {
+        if (!userRepository.existsByIdUsuarioAndFechaBajaIsNull(dto.getIdUsuario())) {
             throw new RuntimeException("Usuario no encontrado");
         }
         for (PickOrderLineCreateDTO lineaRetiro : dto.getLineasRetiro()) {
-            if (!productRepository.existsById(lineaRetiro.getIdProducto())) {
+            if (!productRepository.existsByIdProductoAndFechaBajaIsNull(lineaRetiro.getIdProducto())) {
                 throw new RuntimeException("Producto no encontrado: " + lineaRetiro.getIdProducto());
             }
         }
@@ -89,11 +89,11 @@ public class PickOrderService {
     public PickOrderResponseDTO update(Long id, PickOrderCreateDTO dto) {
         PickOrder order = findActiveOrThrow(id);
 
-        if (!userRepository.existsById(dto.getIdUsuario())) {
+        if (!userRepository.existsByIdUsuarioAndFechaBajaIsNull(dto.getIdUsuario())) {
             throw new RuntimeException("Usuario no encontrado");
         }
         for (PickOrderLineCreateDTO lineaRetiro : dto.getLineasRetiro()) {
-            if (!productRepository.existsById(lineaRetiro.getIdProducto())) {
+            if (!productRepository.existsByIdProductoAndFechaBajaIsNull(lineaRetiro.getIdProducto())) {
                 throw new RuntimeException("Producto no encontrado: " + lineaRetiro.getIdProducto());
             }
         }

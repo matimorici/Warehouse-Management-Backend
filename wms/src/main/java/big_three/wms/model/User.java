@@ -37,4 +37,7 @@ public class User {
 
 		@Column(name = "fecha_baja")
 		private LocalDateTime fechaBaja;
+
+		@Column(name = "id_usuario_baja")
+		private Long idUsuarioBaja;
 }

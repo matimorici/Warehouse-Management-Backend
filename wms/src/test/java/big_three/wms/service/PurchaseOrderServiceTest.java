@@ -87,9 +87,9 @@ class PurchaseOrderServiceTest {
     }
 
     private void stubSupplierAndProductsExist() {
-        when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(2L)).thenReturn(true);
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(2L)).thenReturn(true);
     }
 
     @Test
@@ -119,7 +119,7 @@ class PurchaseOrderServiceTest {
 
     @Test
     void create_unknownSupplier_throws() {
-        when(proveedorRepository.existsById(9L)).thenReturn(false);
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(9L)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> purchaseOrderService.create(orderDto(9L, line(1L, 2))));
@@ -130,13 +130,36 @@ class PurchaseOrderServiceTest {
 
     @Test
     void create_unknownProduct_throws() {
-        when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(9L)).thenReturn(false);
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(9L)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> purchaseOrderService.create(orderDto(1L, line(9L, 2))));
 
         assertTrue(ex.getMessage().contains("9"));
+        verify(purchaseOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedSupplierIsTreatedAsNotFound() {
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> purchaseOrderService.create(orderDto(1L, line(1L, 2))));
+
+        assertEquals("Proveedor no encontrado", ex.getMessage());
+        verify(purchaseOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void create_deletedProductIsTreatedAsNotFound() {
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(1L)).thenReturn(false);
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> purchaseOrderService.create(orderDto(1L, line(1L, 2))));
+
+        assertEquals("Producto no encontrado: 1", ex.getMessage());
         verify(purchaseOrderRepository, never()).save(any());
     }
 
@@ -190,8 +213,8 @@ class PurchaseOrderServiceTest {
     @Test
     void update_pendiente_replacesLinesWithoutStockAdjustment() {
         when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L, PurchaseOrder.Status.PENDIENTE)));
-        when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(2L)).thenReturn(true);
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(2L)).thenReturn(true);
 
         List<PurchaseOrderLine> oldLines = List.of(savedLine(10L, 1L, 3));
         List<PurchaseOrderLine> newLines = List.of(savedLine(10L, 2L, 4));
@@ -209,8 +232,8 @@ class PurchaseOrderServiceTest {
     @Test
     void update_recibida_reversesOldLinesAndAppliesNewDeltas() {
         when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(order(10L, PurchaseOrder.Status.RECIBIDA)));
-        when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(2L)).thenReturn(true);
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(2L)).thenReturn(true);
 
         List<PurchaseOrderLine> oldLines = List.of(savedLine(10L, 1L, 3));
         List<PurchaseOrderLine> newLines = List.of(savedLine(10L, 2L, 4));
@@ -231,8 +254,8 @@ class PurchaseOrderServiceTest {
         LocalDateTime reception = LocalDateTime.of(2026, 1, 10, 9, 30);
         received.setReceivedDateTime(reception);
         when(purchaseOrderRepository.findById(10L)).thenReturn(Optional.of(received));
-        when(proveedorRepository.existsById(1L)).thenReturn(true);
-        when(productRepository.existsById(2L)).thenReturn(true);
+        when(proveedorRepository.existsByIdProveedorAndFechaBajaIsNull(1L)).thenReturn(true);
+        when(productRepository.existsByIdProductoAndFechaBajaIsNull(2L)).thenReturn(true);
 
         List<PurchaseOrderLine> oldLines = List.of(savedLine(10L, 1L, 3));
         List<PurchaseOrderLine> newLines = List.of(savedLine(10L, 2L, 4));

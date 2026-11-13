@@ -254,7 +254,7 @@ Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma globa
 | `GET` | `/api/usuarios/{id}` | Buscar usuario activo por ID | — |
 | `DELETE` | `/api/usuarios/{id}` | Desactivar usuario (baja lógica) | — |
 
-> **Baja lógica:** `DELETE /api/usuarios/{id}` no borra la fila. Setea `usuario.fecha_baja` con la fecha/hora actual; los listados y búsquedas por ID solo devuelven usuarios con `fecha_baja IS NULL`, y el login rechaza usuarios dados de baja. Esto preserva la trazabilidad de `orden_retiro` y `movimiento_fisico`, que referencian al usuario.
+> **Baja lógica:** `DELETE /api/usuarios/{id}` no borra la fila. Setea `usuario.fecha_baja` y `usuario.id_usuario_baja` (quién la hizo); los listados y búsquedas por ID solo devuelven usuarios con `fecha_baja IS NULL`, y un usuario ya dado de baja se considera inexistente. Reglas: no podés darte de baja a vos mismo (`"No podés darte de baja a vos mismo"`) y no se puede dar de baja al último `ADMINISTRADOR` activo (`"No se puede dar de baja al último administrador"`). Ambas violaciones responden `400`. El CUIL sigue siendo único a nivel global, incluso si el usuario está dado de baja; el mensaje de duplicado lo aclara: `"Ya existe un usuario con ese CUIL (puede estar dado de baja): <cuil>"`. Esto preserva la trazabilidad de `orden_retiro` y `movimiento_fisico`, que referencian al usuario.
 
 ### Autenticación
 
@@ -264,7 +264,7 @@ Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma globa
 | `POST` | `/api/auth/logout` | Logout (requiere sesión activa) | — |
 
 - El login usa autenticación basada en sesión (`HttpSession`), no JWT. Al loguearse, Spring Security valida las credenciales (CUIL + contraseña contra el hash BCrypt guardado) y crea una sesión identificada por la cookie `JSESSIONID`, que el cliente debe reenviar en pedidos posteriores para mantenerse autenticado. La sesión expira tras 90 minutos de inactividad.
-- Los usuarios dados de baja (`fecha_baja` no nulo) no pueden autenticarse: `CustomUserDetailsService` solo busca usuarios activos.
+- Los usuarios dados de baja (`fecha_baja` no nulo) no pueden autenticarse: `CustomUserDetailsService` carga el usuario por CUIL y marca el `UserDetails` como `.disabled(true)`, por lo que el login falla con el mismo mensaje genérico y cuenta como intento fallido. **Limitación conocida:** una sesión abierta antes de la baja sigue siendo válida hasta que expira (90 minutos); no se invalidan sesiones al dar de baja.
 - El sistema tiene protección CSRF habilitada: todo `POST`/`PUT`/`DELETE`, incluido `/api/auth/login`, requiere el token CSRF. El backend lo entrega en la cookie `XSRF-TOKEN`; el cliente debe reenviarlo en el header `X-XSRF-TOKEN`. El cliente debe pedir primero cualquier endpoint (el backend responde con la cookie) y luego copiar su valor al header en cada `POST`/`PUT`/`DELETE`, además de enviar las cookies (`withCredentials: true` en Angular). Atención: el interceptor `HttpClientXsrfModule` de Angular solo actúa sobre URLs relativas; con URL absoluta hace falta un proxy de desarrollo o un interceptor propio.
 - Roles disponibles: `OPERARIO`, `ADMINISTRADOR` (ver enum `Role`).
 - Tras 5 intentos fallidos de login para un mismo CUIL, el login se bloquea por 15 minutos y responde `429`. Un login exitoso reinicia el contador. El contador vive en memoria: se reinicia si el backend se reinicia.
@@ -291,11 +291,13 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 | `GET` | `/api/productos` | Listar todos los productos (con stock) | — |
 | `GET` | `/api/productos/{id}` | Buscar producto por ID | — |
 | `PUT` | `/api/productos/{id}` | Actualizar producto | `{ "nombreProducto", "descripcionProducto", "codigoBarras"?, "idProveedor", "origenCodigoBarras", "cantidadDisponible"?, "cantidadPendiente"? }` |
-| `DELETE` | `/api/productos/{id}` | Eliminar producto | — |
+| `DELETE` | `/api/productos/{id}` | Dar de baja el producto (lógica) | — |
 | `GET` | `/api/productos/{id}/stock` | Obtener stock de un producto | — |
 | `PUT` | `/api/productos/{id}/stock` | Actualizar stock de un producto | `{ "cantidadDisponible"?, "cantidadPendiente"? }` |
 
 > Si `codigoBarras` se envía vacío o nulo al crear, se genera automáticamente un código interno con formato `INT-XXXXXX`.
+>
+> **Baja lógica:** `DELETE /api/productos/{id}` no borra la fila ni su `Stock`. Setea `producto.fecha_baja` e `id_usuario_baja`; el producto deja de aparecer en listados/búsquedas y se considera inexistente para `GET`, `PUT`, stock, código de barras y ajustes de stock. Solo se permite si `cantidadDisponible == 0` (si no hay fila de stock se considera 0; `cantidadPendiente` no se exige); si hay stock disponible responde `400` con `"No se puede dar de baja un producto con stock disponible"`. El código de barras sigue siendo único global, incluso para productos dados de baja (`"Ya existe un producto con ese código de barras (puede estar dado de baja): <codigo>"`).
 
 ### Proveedores
 
@@ -305,7 +307,9 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 | `GET` | `/api/proveedores` | Listar todos los proveedores | — |
 | `GET` | `/api/proveedores/{id}` | Buscar proveedor por ID | — |
 | `PUT` | `/api/proveedores/{id}` | Actualizar proveedor | `{ "cuit", "razonSocial", "telefono"?, "mail"?, "direccion"? }` |
-| `DELETE` | `/api/proveedores/{id}` | Eliminar proveedor | — |
+| `DELETE` | `/api/proveedores/{id}` | Dar de baja el proveedor (lógica) | — |
+
+> **Baja lógica:** `DELETE /api/proveedores/{id}` no borra la fila. Setea `proveedor.fecha_baja` e `id_usuario_baja`; el proveedor deja de aparecer en listados/búsquedas y se considera inexistente al crear productos u órdenes de compra, al crear valoraciones y al consultar valoraciones por proveedor. Solo se permite si no tiene productos activos ni órdenes de compra `PENDIENTE` activas; si los tiene responde `400` con `"No se puede dar de baja un proveedor con productos activos u órdenes pendientes"`. El CUIT sigue siendo único global (`"Ya existe un proveedor con ese CUIT (puede estar dado de baja): <cuit>"`).
 
 ### Ubicaciones
 
@@ -315,7 +319,9 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 | `GET` | `/api/ubicaciones` | Listar todas las ubicaciones | — |
 | `GET` | `/api/ubicaciones/{id}` | Buscar ubicación por ID | — |
 | `PUT` | `/api/ubicaciones/{id}` | Actualizar ubicación | `{ "name" }` |
-| `DELETE` | `/api/ubicaciones/{id}` | Eliminar ubicación | — |
+| `DELETE` | `/api/ubicaciones/{id}` | Dar de baja la ubicación (lógica) | — |
+
+> **Baja lógica:** `DELETE /api/ubicaciones/{id}` no borra la fila. Setea `ubicacion.fecha_baja` e `id_usuario_baja`; la ubicación deja de aparecer en listados/búsquedas y se considera inexistente al crear movimientos físicos. Solo se permite si ningún producto activo está actualmente en esa ubicación (ubicación actual = `id_ubicacion_hasta` del último `movimiento_fisico` del producto); si hay productos responde `400` con `"No se puede dar de baja una ubicación que contiene productos"`.
 
 ### Valoraciones de Proveedor
 
@@ -327,7 +333,7 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 | `PUT` | `/api/valoraciones-proveedor/{id}` | Actualizar valoración | `{ "idSupplier", "deliveryTime"?, "deliveryMethod"?, "priceQualityRatio"? }` |
 | `DELETE` | `/api/valoraciones-proveedor/{id}` | Eliminar valoración | — |
 
-> La fecha/hora (`dateTime`) se asigna automáticamente al crear y al actualizar. El proveedor debe existir al crear. Al actualizar **no se cambia el proveedor** de la valoración (el campo `idSupplier` del body se ignora en `PUT`); solo se actualizan `deliveryTime`, `deliveryMethod` y `priceQualityRatio`.
+> La fecha/hora (`dateTime`) se asigna automáticamente al crear y al actualizar. El proveedor debe existir y estar activo al crear y al filtrar por `?idSupplier=`; un proveedor dado de baja se considera inexistente (`"Proveedor no encontrado"`). Al actualizar **no se cambia el proveedor** de la valoración (el campo `idSupplier` del body se ignora en `PUT`); solo se actualizan `deliveryTime`, `deliveryMethod` y `priceQualityRatio`.
 
 ### Órdenes de Retiro
 
@@ -360,7 +366,7 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 >
 > La respuesta (`PurchaseOrderResponseDTO`) incluye `receptionDateTime` entre `status` y `lines`; vale `null` hasta que la orden se recibe. Las órdenes recibidas antes de la migración V5 también quedan con `receptionDateTime = null` (no se inventó un backfill).
 >
-> **Consecuencia de la baja lógica de órdenes:** como las órdenes dadas de baja conservan sus líneas, un producto o proveedor referenciado por ellas no se puede borrar físicamente (las FK de `linea_compra`/`orden_compra` no tienen cascade). Es intencional: en el paso 1B esas entidades pasan a baja lógica, por lo que el problema desaparece sin borrar historial.
+> **Referencias activas:** al crear o actualizar una orden de retiro, el usuario y los productos referenciados deben estar activos. Al crear o actualizar una orden de compra, el proveedor y los productos deben estar activos. Un recurso dado de baja se considera inexistente (`"Usuario no encontrado"`, `"Proveedor no encontrado"`, `"Producto no encontrado: <id>"`). Como las órdenes dadas de baja conservan sus líneas, el historial se mantiene; productos y proveedores ahora se dan de baja lógicamente (1B), sin borrar filas referenciadas.
 
 ## Validaciones
 
@@ -376,7 +382,7 @@ Los DTOs de creación usan Jakarta Bean Validation. Errores de validación retor
 
 ## Issues conocidos
 
-1. **Orphan Stock al eliminar producto**: `ProductService.deleteById()` no elimina el `Stock` asociado — quedan filas huérfanas.
+1. ~~**Orphan Stock al eliminar producto**~~ **RESUELTO/SUPERSEDIDO**: la baja de producto ahora es lógica (1B) y conserva intencionalmente la fila de `Stock`; ya no hay borrado físico ni filas huérfanas.
 2. **Login duplicado**: `POST /api/usuarios/login` y `POST /api/auth/login` hacen lo mismo.
 3. **N+1 query en listar productos**: Cada producto dispara una query separada para buscar su stock.
 4. **Sin autenticación real**: El login retorna datos pero no genera token ni sesión.
