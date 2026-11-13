@@ -39,5 +39,16 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build, test y análisis Sonar
+        run: >
+          ./mvnw -B verify
+          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          -Dsonar.qualitygate.wait=true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: chmod +x mvnw
       - run: ./mvnw -B verify
