@@ -43,6 +43,7 @@ Authorization rules in `filterChain` (`authorizeHttpRequests`, evaluated top to 
 
 - `/api/auth/login` → `permitAll`
 - `/api/usuarios/**` → `hasRole("ADMINISTRADOR")`
+- `/api/reportes/**` → `hasRole("ADMINISTRADOR")` (declared before `anyRequest()`)
 - `GET /api/proveedores/**` → `hasAnyRole("ADMINISTRADOR", "OPERARIO")`; any other method on `/api/proveedores/**` → `hasRole("ADMINISTRADOR")` (the `GET` rule must stay declared first)
 - `/api/productos/**`, `/api/ordenes-retiro/**`, `/api/ordenes-compra/**`, `/api/ubicaciones/**`, `/api/valoraciones-proveedor/**`, `/api/movimientos-fisicos/**` → `hasAnyRole("ADMINISTRADOR", "OPERARIO")`
 - Everything else → `anyRequest().authenticated()`
@@ -67,12 +68,12 @@ Authorization rules are covered by `RoleAuthorizationTest`, a parameterized tabl
 wms/src/main/java/big_three/wms/
 ├── WmsApplication.java        # entrypoint
 ├── config/SecurityConfig.java # PasswordEncoder + SecurityFilterChain
-├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, SupplierRatingController, UserController, PhysicalMovementController
-├── dto/                       # 23 DTOs, one per request/response (see API section)
-├── exception/InvalidCredentialsException.java
+├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, ReportController, SupplierRatingController, UserController, PhysicalMovementController
+├── dto/                       # request/response DTOs (see API section); report DTOs live in dto/report/
+├── exception/                 # InvalidCredentialsException + GlobalExceptionHandler
 ├── model/                     # Location, User, Product, Proveedor, Stock, PickOrder, PickOrderLine, PurchaseOrder, PurchaseOrderLine, SupplierRating, PhysicalMovement
-├── repository/                # 11 Spring Data JPA repositories
-└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, SupplierRatingService, PhysicalMovementService, BarcodeService
+├── repository/                # Spring Data JPA repositories, including ReportRepository (Repository<Product, Long>)
+└── service/                   # LocationService, UserService, ProductService, ProveedorService, PickOrderService, PurchaseOrderService, ReportService, SupplierRatingService, PhysicalMovementService, BarcodeService
 ```
 
 ## Entities (11)
@@ -237,11 +238,51 @@ Append-only feature: there is no `PUT` (update) or `DELETE`, and no `GET /{id}` 
 
 `PhysicalMovementResponseDTO`: `idProduct`, `dateTime`, `idLocationFrom`, `idLocationTo`, `idUser`. Filter precedence when several params are given on the same URL: `?idProduct=` → `?idUser=` → `?from=` + `?to=` (both required, else `IllegalArgumentException` → 400) → no params = all. Missing referenced records on `create` throw `IllegalArgumentException` → 400.
 
+## Reportes
+
+Módulo de solo lectura para el rol `ADMINISTRADOR`, bajo `/api/reportes` (regla propia en `SecurityConfig`, declarada antes de `anyRequest()`). Estructura:
+
+- `controller/ReportController`: `@RequestMapping("/api/reportes")`, solo `GET`.
+- `service/ReportService`: resuelve defaults y validaciones manuales (`IllegalArgumentException` → 400); mapea proyecciones nativas a DTOs.
+- `repository/ReportRepository`: extiende `org.springframework.data.repository.Repository<Product, Long>` (no tiene entidad propia). Todas las lecturas son `@Query`; una sola interfaz para todos los prompts de reportes.
+- `dto/report/`: `StockBajoDTO`, `StockPorProveedorDTO`, `ProductoUbicacionActualDTO`, `UbicacionOcupacionDTO`. Nombres de rutas, parámetros y campos en español.
+
+Convenciones de consultas (aplican a este y a los próximos prompts de reportes):
+
+- Agregar en SQL/JPQL, nunca iterando entidades en Java; prohibido N+1.
+- Preferir JPQL con constructor expression (`SELECT new big_three.wms.dto.report.X(...)`).
+- No existe asociación JPA `Product`↔`Stock`: usar entity joins (`LEFT JOIN Stock s ON s.idProducto = p.idProducto`).
+- `SUM(Integer)` devuelve `Long`; `AVG` devuelve `Double`. Usar `COALESCE` para que un producto sin fila de `stock` cuente como 0.
+- SQL nativo solo cuando haga falta (`LATERAL`, `DISTINCT ON`, `date_trunc`, `FILTER`). Las queries nativas devuelven proyecciones de interfaz (anidadas en `ReportRepository`) y `ReportService` las mapea a DTO.
+- En SQL nativo, alias entre comillas dobles (`AS "idProducto"`): PostgreSQL pasa a minúsculas los alias sin comillas.
+- Nunca pasar parámetros `null` a una query; los defaults se resuelven en `ReportService`. Usar parámetros no nulos (por ejemplo el booleano `soloSinUbicar`).
+- Ordenamientos deterministas, siempre con desempate por nombre o id.
+
+Criterio de bajas lógicas:
+
+- **Reportes de estado actual** (los cuatro de este prompt) excluyen productos, proveedores y ubicaciones con `fecha_baja` no nulo.
+- **Reportes históricos por período** (próximos prompts) excluyen órdenes dadas de baja, pero incluyen productos, proveedores y usuarios dados de baja; esas filas llevan un campo booleano `activo`.
+
+Endpoints actuales:
+
+- `GET /api/reportes/stock-bajo?umbral=10`: productos activos con `cantidadDisponible <= umbral` (incluye 0). Default 10 resuelto en el service; negativo → `IllegalArgumentException("El umbral no puede ser negativo")`. Orden: disponible asc, nombre asc.
+- `GET /api/reportes/stock-por-proveedor`: todos los proveedores activos (también sin productos, con ceros), contando solo productos activos. El schema no tiene precios: mide unidades, no dinero. Orden: unidades disponibles desc, razón social.
+- `GET /api/reportes/productos/ubicacion-actual?soloSinUbicar=false`: productos activos; ubicación actual = `id_ubicacion_hasta` del último `movimiento_fisico` (query nativa con `LEFT JOIN LATERAL`). Productos nunca movidos: ubicación y fecha `null`. Si el último movimiento apunta a una ubicación dada de baja, la ubicación queda `null` pero la fecha se conserva; `soloSinUbicar=true` solo devuelve los nunca movidos. Orden: nombre de ubicación (nulls al final), nombre de producto.
+- `GET /api/reportes/ubicaciones/ocupacion`: ubicaciones activas (también vacías); `cantidadProductos` = productos activos distintos cuya ubicación actual es esa (CTE con `DISTINCT ON`). Orden: cantidad desc, nombre. Limitación documentada: cuenta productos, no unidades, porque el stock no está dividido por ubicación y los movimientos no mueven cantidades.
+
+Seguridad y tests:
+
+- `SecurityConfig`: `/api/reportes/**` → `hasRole("ADMINISTRADOR")`, antes de `anyRequest()`.
+- `RoleAuthorizationTest` carga todos los controllers: cada nuevo controller necesita su `@MockitoBean` (hoy `ReportService`). Por cada endpoint nuevo se agregan tres filas: `ADMINISTRADOR→true`, `OPERARIO→false`, `ANONIMO→false`.
+- `ReportControllerTest` usa `@WebMvcTest(ReportController.class)`, `@Import(SecurityConfig.class)`, `@MockitoBean ReportService` y `UserDetailsService`, y `@WithMockUser(roles = "ADMINISTRADOR")`.
+- Los mocks no validan las queries: al cambiar JPQL/SQL hay que arrancar la app con el perfil `local` (Hibernate valida los JPQL) y, si hay PostgreSQL, correr las queries nativas contra datos de prueba.
+
 ## Error handling
 
 - `GlobalExceptionHandler` (`exception/GlobalExceptionHandler.java`) is the single `@ControllerAdvice` for unhandled exceptions, always responding `{ "error": message }`:
   - `InvalidCredentialsException` → 401
-  - `IllegalArgumentException` (duplicate CUIL/CUIT/barcode, soft-delete business rules such as stock/active products/last admin) → 400
+  - `IllegalArgumentException` (duplicate CUIL/CUIT/barcode, soft-delete business rules such as stock/active products/last admin, report validation such as a negative threshold) → 400
+  - `MethodArgumentTypeMismatchException` (e.g. `umbral=abc`) → 400 with `{"error": "El parámetro '<nombre>' tiene un valor inválido"}`. This handler exists specifically so type mismatches do not fall into the generic `RuntimeException` → 500 handler.
   - `RuntimeException` (e.g. "Producto no encontrado") → 500
 - Bean Validation failures → 400 with Spring's default field-error structure.
 - `InvalidCredentialsException` exists solely for login; the duplicate-email/duplicate-CUIL/duplicate-barcode checks throw `IllegalArgumentException`.

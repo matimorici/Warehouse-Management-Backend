@@ -132,4 +132,17 @@ Build read-only reporting endpoints for the admin UI from the existing product, 
   - [ ] Reactivación: no hay endpoint ni flujo para volver a activar una fila dada de baja (habría que limpiar `fecha_baja`/`id_usuario_baja` con reglas de negocio).
   - [ ] Sesiones abiertas: una sesión iniciada antes de la baja sigue válida hasta expirar (90 min); evaluar invalidación explícita de sesiones al dar de baja un usuario.
   - [ ] Auditoría de bajas: hoy solo se guarda fecha + usuario; no hay historial de cambios ni endpoint de consulta de bajas.
-- [ ] **Reportes (prompts 2 a 5).** Pendiente: infraestructura de reportes, reportes de inventario/período/compras y (opcional) auditoría de bajas. Recordar que las órdenes RECIBIDAS anteriores a V5 tienen `fecha_recepcion = NULL` (indicador de calidad de datos en el ranking de proveedores).
+- [X] **2 — Reportes de inventario (prompt 2).**
+  - [X] `ReportController` (`/api/reportes`, solo `GET`), `ReportService`, `ReportRepository` (`Repository<Product, Long>`) y DTOs en `dto/report/`.
+  - [X] 4.1 `GET /api/reportes/stock-bajo?umbral=10` (default resuelto en el service; negativo → `IllegalArgumentException`), 4.2 `GET /api/reportes/stock-por-proveedor`, 4.3 `GET /api/reportes/productos/ubicacion-actual?soloSinUbicar=false` (`LEFT JOIN LATERAL`), 4.4 `GET /api/reportes/ubicaciones/ocupacion` (CTE con `DISTINCT ON`).
+  - [X] JPQL con constructor expression / SQL nativo con proyecciones de interfaz; `COALESCE` para stock 0; orden determinista; sin N+1.
+  - [X] Seguridad: `/api/reportes/**` → `hasRole("ADMINISTRADOR")` antes de `anyRequest()`. `RoleAuthorizationTest` con `@MockitoBean ReportService` y tres filas por endpoint (`ADMINISTRADOR`/`OPERARIO`/`ANONIMO`).
+  - [X] Punto 5 verificado: `umbral=abc` devolvía 500; se agregó un handler específico para `MethodArgumentTypeMismatchException` → 400 con el nombre del parámetro (`"El parámetro 'umbral' tiene un valor inválido"`) y su test.
+  - [X] Tests: `ReportServiceTest` (mapeo, default/negativo, `soloSinUbicar`) y `ReportControllerTest` (200/jsonPath, 400 de negocio, 400 de tipo). Suite completa: 298 tests.
+  - [X] Verificación contra PostgreSQL real usando una base scratch (`wms_report_test`, JDBC): 4.1 default y `umbral=0`; 4.2 proveedor sin productos; 4.3 producto sin fila de stock, producto jamás movido, último movimiento y ubicación dada de baja; 4.4 ubicación vacía; producto/proveedor/ubicación dados de baja excluidos. También se probaron los cuatro endpoints con una sesión real de `ADMINISTRADOR`; `OPERARIO` y anónimo reciben 403.
+  - [X] Documentación: README (sección "Reportes", limitaciones de 4.2 y 4.4) y AGENTS.md (estructura, convenciones de consultas, criterio de bajas y reglas de tests/seguridad).
+- [ ] **Pendientes de reportes (prompts 3 a 5).**
+  - [ ] Reportes históricos por período: excluir órdenes dadas de baja e incluir productos, proveedores y usuarios dados de baja con un campo `activo`.
+  - [ ] Ranking/performance de proveedores, compras y movimientos por período. Recordar que las órdenes `RECIBIDA` anteriores a V5 tienen `fecha_recepcion = NULL` (indicador de calidad de datos).
+  - [ ] (Opcional) auditoría de bajas.
+  - [ ] Definir si un producto cuyo último movimiento apunta a una ubicación dada de baja debe mostrarse con ubicación `null` (comportamiento actual) o reagruparse; hoy conserva `fechaUltimoMovimiento`.

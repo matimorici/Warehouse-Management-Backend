@@ -44,6 +44,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/api/usuarios/**").hasRole("ADMINISTRADOR")
+                        .requestMatchers("/api/reportes/**").hasRole("ADMINISTRADOR")
                         .requestMatchers("/api/productos/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
                         .requestMatchers("/api/ordenes-retiro/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
                         .requestMatchers("/api/ordenes-compra/**").hasAnyRole("ADMINISTRADOR", "OPERARIO")
@@ -96,6 +97,7 @@ public class SecurityConfig {
  * ---------------------------------------|--------------------|------------------
  * /api/auth/login                        | POST               | Público (sin rol)
  * /api/usuarios/**                       | -                  | ADMINISTRADOR
+ * /api/reportes/**                       | GET                | ADMINISTRADOR
  * /api/proveedores/**                    | GET                | Cualquier rol
  * /api/proveedores/**                    | POST/PUT/DELETE    | ADMINISTRADOR
  * /api/productos/**                      | -                  | Cualquier rol

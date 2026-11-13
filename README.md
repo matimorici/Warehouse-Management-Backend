@@ -167,6 +167,7 @@ wms/src/main/java/big_three/wms/
 │   ├── ProductController.java       # CRUD productos + stock
 │   ├── ProveedorController.java     # CRUD proveedores
 │   ├── PurchaseOrderController.java # CRUD órdenes de compra + recibir
+│   ├── ReportController.java        # Reportes de solo lectura (ADMINISTRADOR)
 │   ├── SupplierRatingController.java # CRUD valoraciones de proveedor
 │   └── UserController.java          # CRUD usuarios
 ├── dto/
@@ -190,7 +191,12 @@ wms/src/main/java/big_three/wms/
 │   ├── SupplierRatingCreateDTO.java
 │   ├── SupplierRatingResponseDTO.java
 │   ├── UserCreateDTO.java
-│   └── UserResponseDTO.java
+│   ├── UserResponseDTO.java
+│   └── report/
+│       ├── ProductoUbicacionActualDTO.java
+│       ├── StockBajoDTO.java
+│       ├── StockPorProveedorDTO.java
+│       └── UbicacionOcupacionDTO.java
 ├── exception/
 │   └── InvalidCredentialsException.java
 ├── model/
@@ -212,6 +218,7 @@ wms/src/main/java/big_three/wms/
 │   ├── ProveedorRepository.java
 │   ├── PurchaseOrderLineRepository.java
 │   ├── PurchaseOrderRepository.java
+│   ├── ReportRepository.java
 │   ├── StockRepository.java
 │   ├── SupplierRatingRepository.java
 │   └── UserRepository.java
@@ -221,6 +228,7 @@ wms/src/main/java/big_three/wms/
     ├── ProductService.java
     ├── ProveedorService.java
     ├── PurchaseOrderService.java
+    ├── ReportService.java
     ├── SupplierRatingService.java
     └── UserService.java
 ```
@@ -279,6 +287,7 @@ Todas las rutas están bajo el prefijo `/api/`. CORS se configura de forma globa
 | `GET /api/proveedores/**` | `OPERARIO` o `ADMINISTRADOR` |
 | `POST`/`PUT`/`DELETE /api/proveedores/**` | Solo `ADMINISTRADOR` |
 | Productos, órdenes de retiro y de compra, ubicaciones, valoraciones de proveedor, movimientos físicos | `OPERARIO` o `ADMINISTRADOR` |
+| `/api/reportes/**` | Solo `ADMINISTRADOR` |
 | Cualquier otra ruta | Requiere estar autenticado |
 
 Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requerido también recibe `403`.
@@ -367,6 +376,24 @@ Un pedido sin sesión recibe `403`. Un pedido con sesión pero sin el rol requer
 > La respuesta (`PurchaseOrderResponseDTO`) incluye `receptionDateTime` entre `status` y `lines`; vale `null` hasta que la orden se recibe. Las órdenes recibidas antes de la migración V5 también quedan con `receptionDateTime = null` (no se inventó un backfill).
 >
 > **Referencias activas:** al crear o actualizar una orden de retiro, el usuario y los productos referenciados deben estar activos. Al crear o actualizar una orden de compra, el proveedor y los productos deben estar activos. Un recurso dado de baja se considera inexistente (`"Usuario no encontrado"`, `"Proveedor no encontrado"`, `"Producto no encontrado: <id>"`). Como las órdenes dadas de baja conservan sus líneas, el historial se mantiene; productos y proveedores ahora se dan de baja lógicamente (1B), sin borrar filas referenciadas.
+
+### Reportes (solo `ADMINISTRADOR`)
+
+Endpoints de solo lectura bajo `/api/reportes`, restringidos a `ADMINISTRADOR`. Las rutas, parámetros y campos de respuesta están en español. Las consultas se resuelven en SQL/JPQL (sin iterar entidades en Java ni N+1). Los reportes de **estado actual** excluyen productos, proveedores y ubicaciones dados de baja; los reportes **históricos por período** (próximos prompts) excluirán las órdenes dadas de baja pero incluirán productos, proveedores y usuarios dados de baja con un campo booleano `activo`.
+
+| Método | Ruta | Parámetros | Campos de respuesta |
+|--------|------|------------|---------------------|
+| `GET` | `/api/reportes/stock-bajo` | `umbral` (entero, opcional, por defecto `10`) | `idProducto`, `nombreProducto`, `codigoBarras`, `idProveedor`, `razonSocial`, `cantidadDisponible`, `cantidadPendiente`, `stockFechaHora` |
+| `GET` | `/api/reportes/stock-por-proveedor` | — | `idProveedor`, `razonSocial`, `cantidadProductos`, `unidadesDisponibles`, `unidadesPendientes` |
+| `GET` | `/api/reportes/productos/ubicacion-actual` | `soloSinUbicar` (booleano, opcional, por defecto `false`) | `idProducto`, `nombreProducto`, `codigoBarras`, `idUbicacion`, `nombreUbicacion`, `fechaUltimoMovimiento` |
+| `GET` | `/api/reportes/ubicaciones/ocupacion` | — | `idUbicacion`, `nombreUbicacion`, `cantidadProductos` |
+
+- **Stock bajo:** productos activos con `cantidadDisponible <= umbral`, incluidos los de stock 0. Un producto sin fila de `stock` cuenta como 0. Orden: `cantidadDisponible` ascendente y luego `nombreProducto`. Si `umbral` es negativo responde `400` con `"El umbral no puede ser negativo"`.
+- **Stock por proveedor:** incluye todos los proveedores activos, incluso los que no tienen productos (con ceros). Solo cuenta productos activos. **El schema no tiene precios**, por eso el reporte mide unidades, no dinero. Orden: `unidadesDisponibles` descendente y luego `razonSocial`.
+- **Ubicación actual:** para cada producto activo, la ubicación es `id_ubicacion_hasta` de su último `movimiento_fisico`. Los productos que nunca se movieron aparecen con `idUbicacion`, `nombreUbicacion` y `fechaUltimoMovimiento` en `null`; `soloSinUbicar=true` devuelve solo esos. Si el último movimiento apunta a una ubicación dada de baja, la ubicación se muestra en `null` pero `fechaUltimoMovimiento` se conserva (el producto no se considera "sin ubicar" porque sí tuvo movimiento). Orden: `nombreUbicacion` (nulls al final) y luego `nombreProducto`.
+- **Ocupación:** incluye todas las ubicaciones activas, incluso las vacías. `cantidadProductos` cuenta productos activos **distintos** cuya ubicación actual es esa. Orden: `cantidadProductos` descendente y luego `nombreUbicacion`.
+- **Limitación de ocupación:** el stock no está dividido por ubicación y los movimientos físicos no mueven cantidades, por lo que el reporte cuenta productos distintos, no unidades.
+- Un parámetro con tipo inválido (por ejemplo `umbral=abc`) responde `400` con `{"error": "El parámetro 'umbral' tiene un valor inválido"}`.
 
 ## Validaciones
 
