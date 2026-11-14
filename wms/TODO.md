@@ -131,7 +131,7 @@ Build read-only reporting endpoints for the admin UI from the existing product, 
 - [ ] **Pendientes de baja lógica (post-1B).**
   - [ ] Reactivación: no hay endpoint ni flujo para volver a activar una fila dada de baja (habría que limpiar `fecha_baja`/`id_usuario_baja` con reglas de negocio).
   - [ ] Sesiones abiertas: una sesión iniciada antes de la baja sigue válida hasta expirar (90 min); evaluar invalidación explícita de sesiones al dar de baja un usuario.
-  - [ ] Auditoría de bajas: hoy solo se guarda fecha + usuario; no hay historial de cambios ni endpoint de consulta de bajas.
+  - [X] Auditoría de bajas: `GET /api/reportes/auditoria/bajas` (prompt 5) consulta las bajas de las seis tablas. Sigue sin haber historial de creación/modificación ni de cambios posteriores a la baja.
 - [X] **2 — Reportes de inventario (prompt 2).**
   - [X] `ReportController` (`/api/reportes`, solo `GET`), `ReportService`, `ReportRepository` (`Repository<Product, Long>`) y DTOs en `dto/report/`.
   - [X] 4.1 `GET /api/reportes/stock-bajo?umbral=10` (default resuelto en el service; negativo → `IllegalArgumentException`), 4.2 `GET /api/reportes/stock-por-proveedor`, 4.3 `GET /api/reportes/productos/ubicacion-actual?soloSinUbicar=false` (`LEFT JOIN LATERAL`), 4.4 `GET /api/reportes/ubicaciones/ocupacion` (CTE con `DISTINCT ON`).
@@ -159,8 +159,15 @@ Build read-only reporting endpoints for the admin UI from the existing product, 
   - [X] Tests: `ReportServiceTest` (24), `ReportControllerTest` (24) y `RoleAuthorizationTest` (57 filas), incluidos combinación por proveedor, `activo`, nulls, redondeo, 200/jsonPath, 400 de validación y fecha inválida.
   - [X] Verificación contra PostgreSQL real con una base scratch (`wms_report4_test`, perfil `local` + HTTP con sesión `ADMINISTRADOR`): orden dada de baja excluida, orden `RECIBIDA` con `fecha_recepcion` NULL contada en `recibidasSinFecha` y fuera del promedio, proveedor activo sin órdenes con ceros, proveedor dado de baja con actividad con `activo=false`, proveedor dado de baja sin actividad ausente, proveedor con valoraciones sin órdenes, y bordes de período (`2026-03-10 00:00` y `2026-03-12 23:59:59` incluidos; `2026-03-09 23:59` y `2026-03-13 00:00` excluidos). También se probaron ambos endpoints sin fechas y los 400 de `from > to` y fecha inválida. No quedaron queries de este prompt sin verificar contra PostgreSQL real.
   - [X] Documentación: README (tabla unificada de reportes y "Limitaciones conocidas") y AGENTS.md (estructura, criterio de bajas, endpoints y tests). TODO actualizado.
-- [ ] **Pendientes de reportes (prompt 5 y evolución).**
-  - [ ] Reportes restantes del prompt 5 (movimientos por período u otros que se definan).
+- [X] **5 — Auditoría de bajas (prompt 5).**
+  - [X] `GET /api/reportes/auditoria/bajas?from&to&entidad&limit=100`: SQL nativo con `UNION ALL` de `usuario`, `producto`, `proveedor`, `ubicacion`, `orden_compra` y `orden_retiro`; período por `fecha_baja` con `ReportPeriod`; `entidad` validada contra lista blanca (case-insensitive, default `"TODAS"`, nunca `null` hacia la query); `limit` 1–500 (default 100); `LEFT JOIN usuario` para `usuarioBaja`; orden `fecha_baja DESC, entidad, id_entidad`.
+  - [X] `BajaAuditoriaDTO` con `entidad`, `idEntidad`, `descripcion`, `fechaBaja`, `idUsuarioBaja`, `usuarioBaja`; descripciones armadas en SQL según el formato pedido.
+  - [X] Seguridad: 3 filas nuevas en `RoleAuthorizationTest` (ADMINISTRADOR `true`; OPERARIO y ANONIMO `false`).
+  - [X] Tests: `ReportServiceTest` (mapeo, `entidad` inválida/case-insensitive, `limit` 0/501, fila sin usuario de baja) y `ReportControllerTest` (200 + jsonPath, 400 de entidad inválida y 400 de fecha malformada). Suite completa: 367 tests, 0 failures, 0 errors.
+  - [X] Verificación contra PostgreSQL real con base scratch (`wms_report5_test`, perfil `local` + HTTP con sesión `ADMINISTRADOR`): bajas en las seis tablas, una baja manual sin `id_usuario_baja`, bordes de período (`2026-03-10 00:00` y `2026-03-12 23:59:59` incluidos; `2026-03-09 23:59:59` y `2026-03-13 00:00` excluidos), filtro por entidad y `limit=1`; también 400 de entidad inválida, fecha malformada y `from > to`, y 403 para anónimo/OPERARIO.
+  - [ ] **No verificado / limitaciones:** la base scratch no tenía filas dadas de baja en las seis tablas simultáneamente con `id_usuario_baja` apuntando a un usuario también dado de baja (sí se cubrió el caso `id_usuario_baja = null`); no se probó con otra zona horaria (el schema usa `TIMESTAMP` sin zona y `LocalDateTime`); no hay paginación más allá de `limit` ni historial de creación/modificación.
+- [ ] **Pendientes de reportes (evolución).**
+  - [ ] Reportes adicionales que se definan (por ejemplo movimientos por período).
   - [ ] Base de datos de test con Testcontainers (mismo ítem 8 de seguridad; no implementar ahora).
   - [ ] Reactivación de registros dados de baja (hoy CUIL/CUIT/código de barras quedan bloqueados por unicidad global).
   - [ ] Revocación de sesiones abiertas al dar de baja un usuario (hoy siguen válidas hasta expirar).

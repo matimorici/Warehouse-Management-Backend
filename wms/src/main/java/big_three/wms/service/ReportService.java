@@ -1,6 +1,7 @@
 package big_three.wms.service;
 
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.BajaAuditoriaDTO;
 import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
@@ -20,6 +21,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -30,6 +32,11 @@ public class ReportService {
     private static final int LIMITE_POR_DEFECTO = 10;
     private static final int LIMITE_MAXIMO = 100;
     private static final String AGRUPACION_POR_DEFECTO = "day";
+    private static final int LIMITE_BAJAS_POR_DEFECTO = 100;
+    private static final int LIMITE_BAJAS_MAXIMO = 500;
+    private static final String TODAS_LAS_ENTIDADES = "TODAS";
+    private static final Set<String> ENTIDADES_BAJA = Set.of(
+            "USUARIO", "PRODUCTO", "PROVEEDOR", "UBICACION", "ORDEN_COMPRA", "ORDEN_RETIRO");
 
     private final ReportRepository reportRepository;
 
@@ -168,6 +175,44 @@ public class ReportService {
                                 Comparator.nullsLast(String::compareTo))
                         .thenComparing(ProveedorRankingDTO::getIdProveedor))
                 .toList();
+    }
+
+    public List<BajaAuditoriaDTO> findBajasAuditoria(
+            LocalDate from, LocalDate to, String entidad, Integer limit) {
+        ReportPeriod periodo = ReportPeriod.of(from, to);
+        String entidadResuelta = normalizarEntidad(entidad);
+        int limiteResuelto = limit != null ? limit : LIMITE_BAJAS_POR_DEFECTO;
+        if (limiteResuelto < 1 || limiteResuelto > LIMITE_BAJAS_MAXIMO) {
+            throw new IllegalArgumentException("El límite debe estar entre 1 y 500");
+        }
+        return reportRepository.findBajasAuditoria(
+                        periodo.from(), periodo.toExclusive(), entidadResuelta, limiteResuelto)
+                .stream()
+                .map(this::convertirBajaAuditoria)
+                .toList();
+    }
+
+    private String normalizarEntidad(String entidad) {
+        if (entidad == null) {
+            return TODAS_LAS_ENTIDADES;
+        }
+        String entidadNormalizada = entidad.trim().toUpperCase(Locale.ROOT);
+        if (!ENTIDADES_BAJA.contains(entidadNormalizada)) {
+            throw new IllegalArgumentException(
+                    "La entidad debe ser USUARIO, PRODUCTO, PROVEEDOR, UBICACION, ORDEN_COMPRA u ORDEN_RETIRO");
+        }
+        return entidadNormalizada;
+    }
+
+    private BajaAuditoriaDTO convertirBajaAuditoria(
+            ReportRepository.BajaAuditoriaProjection fila) {
+        return new BajaAuditoriaDTO(
+                fila.getEntidad(),
+                fila.getIdEntidad(),
+                fila.getDescripcion(),
+                fila.getFechaBaja(),
+                fila.getIdUsuarioBaja(),
+                fila.getUsuarioBaja());
     }
 
     private OrdenCompraResumenDTO convertirOrdenCompraResumen(
