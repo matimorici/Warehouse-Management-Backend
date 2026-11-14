@@ -301,6 +301,90 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    @Query(value = """
+            WITH bajas AS (
+                SELECT CAST('USUARIO' AS VARCHAR) AS entidad,
+                       CAST(u.id_usuario AS BIGINT) AS id_entidad,
+                       CAST(CONCAT(u.nombre, ' ', u.apellido, ' (', u.cuil, ')') AS VARCHAR) AS descripcion,
+                       CAST(u.fecha_baja AS TIMESTAMP) AS fecha_baja,
+                       CAST(u.id_usuario_baja AS BIGINT) AS id_usuario_baja
+                FROM usuario u
+                WHERE u.fecha_baja IS NOT NULL
+                  AND u.fecha_baja >= :from
+                  AND u.fecha_baja < :toExclusive
+                UNION ALL
+                SELECT CAST('PRODUCTO' AS VARCHAR),
+                       CAST(p.id_producto AS BIGINT),
+                       CAST(CONCAT(p.nombre_producto, ' (', p.codigo_barras, ')') AS VARCHAR),
+                       CAST(p.fecha_baja AS TIMESTAMP),
+                       CAST(p.id_usuario_baja AS BIGINT)
+                FROM producto p
+                WHERE p.fecha_baja IS NOT NULL
+                  AND p.fecha_baja >= :from
+                  AND p.fecha_baja < :toExclusive
+                UNION ALL
+                SELECT CAST('PROVEEDOR' AS VARCHAR),
+                       CAST(pr.id_proveedor AS BIGINT),
+                       CAST(CONCAT(pr.razon_social, ' (', pr.cuit, ')') AS VARCHAR),
+                       CAST(pr.fecha_baja AS TIMESTAMP),
+                       CAST(pr.id_usuario_baja AS BIGINT)
+                FROM proveedor pr
+                WHERE pr.fecha_baja IS NOT NULL
+                  AND pr.fecha_baja >= :from
+                  AND pr.fecha_baja < :toExclusive
+                UNION ALL
+                SELECT CAST('UBICACION' AS VARCHAR),
+                       CAST(ub.id_ubicacion AS BIGINT),
+                       CAST(ub.nombre_ubicacion AS VARCHAR),
+                       CAST(ub.fecha_baja AS TIMESTAMP),
+                       CAST(ub.id_usuario_baja AS BIGINT)
+                FROM ubicacion ub
+                WHERE ub.fecha_baja IS NOT NULL
+                  AND ub.fecha_baja >= :from
+                  AND ub.fecha_baja < :toExclusive
+                UNION ALL
+                SELECT CAST('ORDEN_COMPRA' AS VARCHAR),
+                       CAST(oc.id_orden_compra AS BIGINT),
+                       CAST(CONCAT('Orden de compra #', oc.id_orden_compra, ' — ', pr.razon_social) AS VARCHAR),
+                       CAST(oc.fecha_baja AS TIMESTAMP),
+                       CAST(oc.id_usuario_baja AS BIGINT)
+                FROM orden_compra oc
+                JOIN proveedor pr ON pr.id_proveedor = oc.id_proveedor
+                WHERE oc.fecha_baja IS NOT NULL
+                  AND oc.fecha_baja >= :from
+                  AND oc.fecha_baja < :toExclusive
+                UNION ALL
+                SELECT CAST('ORDEN_RETIRO' AS VARCHAR),
+                       CAST(or_ret.id_orden_retiro AS BIGINT),
+                       CAST(CONCAT('Orden de retiro #', or_ret.id_orden_retiro) AS VARCHAR),
+                       CAST(or_ret.fecha_baja AS TIMESTAMP),
+                       CAST(or_ret.id_usuario_baja AS BIGINT)
+                FROM orden_retiro or_ret
+                WHERE or_ret.fecha_baja IS NOT NULL
+                  AND or_ret.fecha_baja >= :from
+                  AND or_ret.fecha_baja < :toExclusive
+            )
+            SELECT b.entidad AS "entidad",
+                   b.id_entidad AS "idEntidad",
+                   b.descripcion AS "descripcion",
+                   b.fecha_baja AS "fechaBaja",
+                   b.id_usuario_baja AS "idUsuarioBaja",
+                   CASE WHEN u.id_usuario IS NULL THEN NULL
+                        ELSE CONCAT(u.nombre, ' ', u.apellido)
+                   END AS "usuarioBaja"
+            FROM bajas b
+            LEFT JOIN usuario u ON u.id_usuario = b.id_usuario_baja
+            WHERE CAST(:entidad AS VARCHAR) = 'TODAS'
+               OR b.entidad = CAST(:entidad AS VARCHAR)
+            ORDER BY b.fecha_baja DESC, b.entidad ASC, b.id_entidad ASC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<BajaAuditoriaProjection> findBajasAuditoria(
+            @Param("from") LocalDateTime from,
+            @Param("toExclusive") LocalDateTime toExclusive,
+            @Param("entidad") String entidad,
+            @Param("limit") int limit);
+
     interface ProductoUbicacionActualProjection {
         Long getIdProducto();
 
@@ -419,5 +503,19 @@ public interface ReportRepository extends Repository<Product, Long> {
         Double getPromedioDiasRecepcion();
 
         Long getRecibidasSinFecha();
+    }
+
+    interface BajaAuditoriaProjection {
+        String getEntidad();
+
+        Long getIdEntidad();
+
+        String getDescripcion();
+
+        LocalDateTime getFechaBaja();
+
+        Long getIdUsuarioBaja();
+
+        String getUsuarioBaja();
     }
 }

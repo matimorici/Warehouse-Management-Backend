@@ -1,6 +1,7 @@
 package big_three.wms.service;
 
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.BajaAuditoriaDTO;
 import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
@@ -494,6 +495,101 @@ class ReportServiceTest {
 
         assertEquals(List.of(2L, 1L, 3L),
                 resultado.stream().map(ProveedorRankingDTO::getIdProveedor).toList());
+    }
+
+    @Test
+    void findBajasAuditoria_sinEntidadNiLimit_usaTodasYCienYResuelveElPeriodo() {
+        ReportRepository.BajaAuditoriaProjection fila = bajaAuditoria(
+                "PRODUCTO", 7L, "Producto (779123)", LocalDateTime.of(2026, 3, 10, 15, 30),
+                2L, "Ana Alvarez");
+        when(reportRepository.findBajasAuditoria(
+                LocalDateTime.of(2026, 3, 10, 0, 0),
+                LocalDateTime.of(2026, 3, 13, 0, 0),
+                "TODAS",
+                100)).thenReturn(List.of(fila));
+
+        List<BajaAuditoriaDTO> resultado = reportService.findBajasAuditoria(
+                LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 12), null, null);
+
+        assertEquals(1, resultado.size());
+        BajaAuditoriaDTO dto = resultado.get(0);
+        assertEquals("PRODUCTO", dto.getEntidad());
+        assertEquals(7L, dto.getIdEntidad());
+        assertEquals("Producto (779123)", dto.getDescripcion());
+        assertEquals(LocalDateTime.of(2026, 3, 10, 15, 30), dto.getFechaBaja());
+        assertEquals(2L, dto.getIdUsuarioBaja());
+        assertEquals("Ana Alvarez", dto.getUsuarioBaja());
+    }
+
+    @Test
+    void findBajasAuditoria_entidadInsensibleAMayusculas_pasaLaEntidadNormalizada() {
+        when(reportRepository.findBajasAuditoria(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                "ORDEN_COMPRA",
+                250)).thenReturn(List.of());
+
+        assertTrue(reportService.findBajasAuditoria(null, null, " orden_compra ", 250).isEmpty());
+    }
+
+    @Test
+    void findBajasAuditoria_entidadInvalida_lanzaIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reportService.findBajasAuditoria(null, null, "CLIENTE", null));
+
+        assertEquals(
+                "La entidad debe ser USUARIO, PRODUCTO, PROVEEDOR, UBICACION, ORDEN_COMPRA u ORDEN_RETIRO",
+                ex.getMessage());
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void findBajasAuditoria_limitCero_lanzaIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reportService.findBajasAuditoria(null, null, null, 0));
+
+        assertEquals("El límite debe estar entre 1 y 500", ex.getMessage());
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void findBajasAuditoria_limitMayorAQuinientos_lanzaIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reportService.findBajasAuditoria(null, null, null, 501));
+
+        assertEquals("El límite debe estar entre 1 y 500", ex.getMessage());
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void findBajasAuditoria_filaSinUsuarioBaja_mapeaUsuarioBajaNull() {
+        ReportRepository.BajaAuditoriaProjection fila = bajaAuditoria(
+                "UBICACION", 3L, "Depósito viejo", LocalDateTime.of(2026, 2, 1, 8, 0),
+                null, null);
+        when(reportRepository.findBajasAuditoria(
+                LocalDateTime.of(1970, 1, 1, 0, 0),
+                LocalDateTime.of(9999, 1, 1, 0, 0),
+                "TODAS",
+                100)).thenReturn(List.of(fila));
+
+        BajaAuditoriaDTO dto = reportService.findBajasAuditoria(null, null, null, null).get(0);
+
+        assertNull(dto.getIdUsuarioBaja());
+        assertNull(dto.getUsuarioBaja());
+    }
+
+    private ReportRepository.BajaAuditoriaProjection bajaAuditoria(
+            String entidad, Long idEntidad, String descripcion, LocalDateTime fechaBaja,
+            Long idUsuarioBaja, String usuarioBaja) {
+        ReportRepository.BajaAuditoriaProjection fila =
+                mock(ReportRepository.BajaAuditoriaProjection.class);
+        when(fila.getEntidad()).thenReturn(entidad);
+        when(fila.getIdEntidad()).thenReturn(idEntidad);
+        when(fila.getDescripcion()).thenReturn(descripcion);
+        when(fila.getFechaBaja()).thenReturn(fechaBaja);
+        when(fila.getIdUsuarioBaja()).thenReturn(idUsuarioBaja);
+        when(fila.getUsuarioBaja()).thenReturn(usuarioBaja);
+        return fila;
     }
 
     private ReportRepository.ProveedorRankingBaseProjection proveedorRanking(

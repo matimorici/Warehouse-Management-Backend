@@ -1,6 +1,7 @@
 package big_three.wms.controller;
 
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.BajaAuditoriaDTO;
 import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
@@ -96,5 +97,14 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ResponseEntity.ok(reportService.findProveedoresRanking(from, to));
+    }
+
+    @GetMapping("/auditoria/bajas")
+    public ResponseEntity<List<BajaAuditoriaDTO>> auditoriaBajas(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String entidad,
+            @RequestParam(required = false) Integer limit) {
+        return ResponseEntity.ok(reportService.findBajasAuditoria(from, to, entidad, limit));
     }
 }

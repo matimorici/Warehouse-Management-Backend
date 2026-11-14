@@ -2,6 +2,7 @@ package big_three.wms.controller;
 
 import big_three.wms.config.SecurityConfig;
 import big_three.wms.dto.report.ActividadOperarioDTO;
+import big_three.wms.dto.report.BajaAuditoriaDTO;
 import big_three.wms.dto.report.OrdenCompraResumenDTO;
 import big_three.wms.dto.report.ProductoMasRetiradoDTO;
 import big_three.wms.dto.report.ProductoSinRotacionDTO;
@@ -339,5 +340,58 @@ class ReportControllerTest {
         mockMvc.perform(get("/api/reportes/proveedores/ranking").param("to", "2026-13-40"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("El parámetro 'to' tiene un valor inválido"));
+    }
+
+    @Test
+    void auditoriaBajas_returns200WithFieldsAndNullUsuarioBaja() throws Exception {
+        when(reportService.findBajasAuditoria(null, null, null, null)).thenReturn(List.of(
+                new BajaAuditoriaDTO("USUARIO", 1L, "Ana Alvarez (20-11111111-1)",
+                        LocalDateTime.of(2026, 3, 10, 15, 30), 2L, "Beto Benitez"),
+                new BajaAuditoriaDTO("UBICACION", 3L, "Depósito viejo",
+                        LocalDateTime.of(2026, 2, 1, 8, 0), null, null)));
+
+        mockMvc.perform(get("/api/reportes/auditoria/bajas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].entidad").value("USUARIO"))
+                .andExpect(jsonPath("$[0].idEntidad").value(1))
+                .andExpect(jsonPath("$[0].descripcion").value("Ana Alvarez (20-11111111-1)"))
+                .andExpect(jsonPath("$[0].fechaBaja").exists())
+                .andExpect(jsonPath("$[0].idUsuarioBaja").value(2))
+                .andExpect(jsonPath("$[0].usuarioBaja").value("Beto Benitez"))
+                .andExpect(jsonPath("$[1].idUsuarioBaja").doesNotExist())
+                .andExpect(jsonPath("$[1].usuarioBaja").doesNotExist());
+    }
+
+    @Test
+    void auditoriaBajas_withParams_passesThemToService() throws Exception {
+        when(reportService.findBajasAuditoria(
+                LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 12), "PRODUCTO", 25))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/reportes/auditoria/bajas")
+                        .param("from", "2026-03-10")
+                        .param("to", "2026-03-12")
+                        .param("entidad", "PRODUCTO")
+                        .param("limit", "25"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void auditoriaBajas_invalidEntidad_returns400() throws Exception {
+        when(reportService.findBajasAuditoria(null, null, "CLIENTE", null))
+                .thenThrow(new IllegalArgumentException(
+                        "La entidad debe ser USUARIO, PRODUCTO, PROVEEDOR, UBICACION, ORDEN_COMPRA u ORDEN_RETIRO"));
+
+        mockMvc.perform(get("/api/reportes/auditoria/bajas").param("entidad", "CLIENTE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        "La entidad debe ser USUARIO, PRODUCTO, PROVEEDOR, UBICACION, ORDEN_COMPRA u ORDEN_RETIRO"));
+    }
+
+    @Test
+    void auditoriaBajas_malformedFrom_returns400WithParameterName() throws Exception {
+        mockMvc.perform(get("/api/reportes/auditoria/bajas").param("from", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("El parámetro 'from' tiene un valor inválido"));
     }
 }
