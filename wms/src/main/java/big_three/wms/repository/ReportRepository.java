@@ -14,6 +14,12 @@ import java.util.List;
 
 public interface ReportRepository extends Repository<Product, Long> {
 
+    /**
+     * Qué trae: productos activos con stock disponible menor o igual a {@code umbral}, con
+     * proveedor, cantidades y fecha del stock. Un producto sin fila de stock cuenta como 0.
+     * Cómo: JPQL sobre {@code Product} con join al proveedor activo, {@code LEFT JOIN} a
+     * {@code Stock}, {@code COALESCE} para el stock faltante y orden por disponible y nombre.
+     */
     @Query("""
             SELECT new big_three.wms.dto.report.StockBajoDTO(
                 p.idProducto,
@@ -34,6 +40,12 @@ public interface ReportRepository extends Repository<Product, Long> {
             """)
     List<StockBajoDTO> findStockBajo(@Param("umbral") Integer umbral);
 
+    /**
+     * Qué trae: por cada proveedor activo, cantidad de productos activos y suma de unidades
+     * disponibles y pendientes. Incluye proveedores sin productos (con ceros).
+     * Cómo: JPQL desde {@code Proveedor} con {@code LEFT JOIN} a sus productos activos y a
+     * {@code Stock}, agrupando por proveedor y usando {@code COALESCE}/{@code SUM}.
+     */
     @Query("""
             SELECT new big_three.wms.dto.report.StockPorProveedorDTO(
                 pr.idProveedor,
@@ -50,6 +62,13 @@ public interface ReportRepository extends Repository<Product, Long> {
             """)
     List<StockPorProveedorDTO> findStockPorProveedor();
 
+    /**
+     * Qué trae: productos activos con su ubicación actual y la fecha del último movimiento
+     * físico; los nunca movidos quedan con ubicación y fecha nulas. Con {@code soloSinUbicar}
+     * devuelve solo esos últimos.
+     * Cómo: SQL nativo con {@code LEFT JOIN LATERAL} que toma el movimiento más reciente de
+     * cada producto ({@code ORDER BY fecha_hora DESC LIMIT 1}) y luego une la ubicación activa.
+     */
     @Query(value = """
             SELECT p.id_producto AS "idProducto",
                    p.nombre_producto AS "nombreProducto",
@@ -74,6 +93,13 @@ public interface ReportRepository extends Repository<Product, Long> {
     List<ProductoUbicacionActualProjection> findProductosUbicacionActual(
             @Param("soloSinUbicar") boolean soloSinUbicar);
 
+    /**
+     * Qué trae: cada ubicación activa con la cantidad de productos activos distintos cuya
+     * última ubicación es esa. Incluye ubicaciones vacías (cantidad 0).
+     * Cómo: SQL nativo con una CTE y {@code DISTINCT ON} para quedarse con el último
+     * movimiento de cada producto, y luego {@code LEFT JOIN} a ubicación y producto activo
+     * con {@code COUNT} y {@code GROUP BY}.
+     */
     @Query(value = """
             WITH ultima_ubicacion AS (
                 SELECT DISTINCT ON (mf.id_producto) mf.id_producto, mf.id_ubicacion_hasta
@@ -93,6 +119,13 @@ public interface ReportRepository extends Repository<Product, Long> {
             """, nativeQuery = true)
     List<UbicacionOcupacionProjection> findUbicacionesOcupacion();
 
+    /**
+     * Qué trae: top de productos por unidades retiradas en el período, con la cantidad de
+     * órdenes de retiro activas que los incluyeron. Incluye productos dados de baja
+     * (con {@code activo = false}) y aplica {@code limit}.
+     * Cómo: SQL nativo desde {@code orden_retiro} uniendo líneas y producto, filtrando
+     * órdenes activas dentro del rango, agrupando por producto y sumando cantidades.
+     */
     @Query(value = """
             SELECT p.id_producto AS "idProducto",
                    p.nombre_producto AS "nombreProducto",
@@ -115,6 +148,13 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("toExclusive") LocalDateTime toExclusive,
             @Param("limit") int limit);
 
+    /**
+     * Qué trae: productos activos sin retiros activos en el período, con su stock disponible
+     * y la fecha de su último retiro histórico (sin limitar al período). Con
+     * {@code soloConStock} exige stock disponible mayor a 0.
+     * Cómo: JPQL con {@code NOT EXISTS} sobre órdenes/líneas del período y una subconsulta
+     * {@code MAX} para el último retiro, más {@code LEFT JOIN} a {@code Stock}.
+     */
     @Query("""
             SELECT new big_three.wms.dto.report.ProductoSinRotacionDTO(
                 p.idProducto,
@@ -145,6 +185,12 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("toExclusive") LocalDateTime toExclusive,
             @Param("soloConStock") boolean soloConStock);
 
+    /**
+     * Qué trae: serie temporal de retiros activos en el período, agrupada por día, semana o
+     * mes, con cantidad de órdenes y unidades retiradas.
+     * Cómo: SQL nativo que usa {@code date_trunc} con la agrupación validada por el service,
+     * filtra órdenes activas en el rango y agrupa/ordena por la primera columna.
+     */
     @Query(value = """
             SELECT CAST(date_trunc(CAST(:agrupacion AS text), o.fecha_hora) AS date) AS "periodo",
                    COUNT(DISTINCT o.id_orden_retiro) AS "cantidadOrdenes",
@@ -162,6 +208,12 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("toExclusive") LocalDateTime toExclusive,
             @Param("agrupacion") String agrupacion);
 
+    /**
+     * Qué trae: la lista base de todos los usuarios con nombre, apellido, CUIL, rol y si están
+     * activos. Es el punto de partida del reporte de actividad, que luego se cruza con retiros
+     * y movimientos en el service.
+     * Cómo: {@code SELECT} directo sobre {@code usuario}, ordenado por id.
+     */
     @Query(value = """
             SELECT u.id_usuario AS "idUsuario",
                    u.nombre AS "nombre",
@@ -174,6 +226,13 @@ public interface ReportRepository extends Repository<Product, Long> {
             """, nativeQuery = true)
     List<UsuarioActividadBaseProjection> findUsuariosActividad();
 
+    /**
+     * Qué trae: por usuario, cantidad de órdenes de retiro activas, unidades retiradas y la
+     * fecha de su última actividad de retiro dentro del período.
+     * Cómo: SQL nativo desde {@code orden_retiro} con {@code LEFT JOIN} a sus líneas, filtrando
+     * órdenes activas en el rango y agrupando por usuario con {@code COUNT DISTINCT},
+     * {@code SUM} y {@code MAX}.
+     */
     @Query(value = """
             SELECT o.id_usuario AS "idUsuario",
                    COUNT(DISTINCT o.id_orden_retiro) AS "cantidadRetiros",
@@ -190,6 +249,12 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    /**
+     * Qué trae: por usuario, cantidad de movimientos físicos y la fecha de su último movimiento
+     * dentro del período.
+     * Cómo: SQL nativo que cuenta y toma el máximo de {@code movimiento_fisico} filtrando por
+     * rango y agrupando por usuario.
+     */
     @Query(value = """
             SELECT m.id_usuario AS "idUsuario",
                    COUNT(*) AS "cantidadMovimientos",
@@ -203,6 +268,14 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    /**
+     * Qué trae: por proveedor, cantidad de órdenes de compra por estado y unidades pedidas y
+     * recibidas en el período. Incluye proveedores activos sin órdenes (con ceros) y proveedores
+     * dados de baja que sí tuvieron órdenes en el período.
+     * Cómo: SQL nativo desde {@code proveedor} con {@code LEFT JOIN} a órdenes activas del rango
+     * y a sus líneas, usando {@code COUNT(DISTINCT ...) FILTER} por estado y {@code SUM ... FILTER}
+     * para las unidades, agrupando por proveedor.
+     */
     @Query(value = """
             SELECT pr.id_proveedor AS "idProveedor",
                    pr.razon_social AS "razonSocial",
@@ -237,6 +310,13 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    /**
+     * Qué trae: los proveedores que deben aparecer en el ranking: todos los activos y los dados
+     * de baja solo si tuvieron valoraciones u órdenes recibidas en el período.
+     * Cómo: SQL nativo sobre {@code proveedor} con dos {@code EXISTS}: uno en
+     * {@code valoracion_proveedor} por fecha y otro en {@code orden_compra} activa y
+     * {@code RECIBIDA} con {@code fecha_recepcion} en el rango.
+     */
     @Query(value = """
             SELECT pr.id_proveedor AS "idProveedor",
                    pr.razon_social AS "razonSocial",
@@ -265,6 +345,12 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    /**
+     * Qué trae: por proveedor, cantidad de valoraciones y promedio de tiempo de entrega
+     * valorado en el período (el promedio ignora valores nulos).
+     * Cómo: SQL nativo sobre {@code valoracion_proveedor} filtrando por {@code fecha_hora},
+     * agrupando por proveedor con {@code COUNT} y {@code AVG}.
+     */
     @Query(value = """
             SELECT v.id_proveedor AS "idProveedor",
                    COUNT(*) AS "cantidadValoraciones",
@@ -278,6 +364,14 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    /**
+     * Qué trae: por proveedor, cantidad de órdenes {@code RECIBIDA} activas con recepción en el
+     * período, promedio de días entre creación y recepción, y cantidad de órdenes recibidas sin
+     * fecha de recepción (estas últimas sin filtro de período).
+     * Cómo: SQL nativo sobre {@code orden_compra} filtrando estado y baja, con
+     * {@code COUNT}/{@code AVG} condicionales ({@code FILTER}) y {@code EXTRACT(EPOCH ...)} para
+     * calcular los días, agrupando por proveedor.
+     */
     @Query(value = """
             SELECT o.id_proveedor AS "idProveedor",
                    COUNT(*) FILTER (
