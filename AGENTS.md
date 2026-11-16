@@ -2,9 +2,9 @@
 
 Backend REST API for a warehouse management system (products, suppliers, stock, pick orders). Spring Boot 4.1.0, Java 25, Lombok, PostgreSQL.
 
-The Maven module lives in `wms/`. The workspace root also holds `README.md` (user-facing docs), this file, and `TODO.md` (the actionable backlog of things to keep working on — read it before starting a task).
+The Maven project lives at the repository root; `README.md` (user-facing docs), this file, and `TODO.md` (the actionable backlog of things to keep working on — read it before starting a task) sit alongside `pom.xml`.
 
-## Commands (run from `wms/`)
+## Commands (run from the repo root)
 
 | Action | Command |
 |--------|---------|
@@ -22,7 +22,7 @@ No lint, format, typecheck, or CI configured. `javac` is the only typechecker.
 - **No test profile / H2 override** — `@SpringBootTest` hits real PostgreSQL. `h2`/`mysql-connector-j` were removed from `pom.xml` (PostgreSQL only); only `postgresql` runtime driver remains.
 - **Frontend CORS**: configured globally in `SecurityConfig` (`corsConfigurationSource`), allowed origin from `app.cors.allowed-origin` in `application.properties`, credentials enabled. Do not add `@CrossOrigin` to controllers.
 - **Libraries**: ZXing 3.5.3 (`core` + `javase`) used by `BarcodeService` to render product barcodes (`GET /api/productos/{id}/barcode`). Lombok excluded from final artifact by `spring-boot-maven-plugin`.
-- `wms/doc/` contains generated Javadoc — ignore it.
+- `doc/` contains generated Javadoc — ignore it.
 
 ## Security
 
@@ -65,7 +65,7 @@ Authorization rules are covered by `RoleAuthorizationTest`, a parameterized tabl
 ## Project structure
 
 ```
-wms/src/main/java/big_three/wms/
+src/main/java/big_three/wms/
 ├── WmsApplication.java        # entrypoint
 ├── config/SecurityConfig.java # PasswordEncoder + SecurityFilterChain
 ├── controller/                # AuthController, LocationController, PickOrderController, ProductController, ProveedorController, PurchaseOrderController, ReportController, SupplierRatingController, UserController, PhysicalMovementController

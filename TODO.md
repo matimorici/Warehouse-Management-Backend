@@ -91,7 +91,7 @@ Build read-only reporting endpoints for the admin UI from the existing product, 
 
 ## Test infrastructure (new, from the testing pass)
 
-- Service unit tests + `@WebMvcTest` controller tests added under `wms/src/test/java/big_three/wms/`. They run without a DB.
+- Service unit tests + `@WebMvcTest` controller tests added under `src/test/java/big_three/wms/`. They run without a DB.
 - `@WebMvcTest` tests `@Import(SecurityConfig.class)` explicitly and use `@MockitoBean` (Boot 4 — `@MockBean` is deprecated).
 - Schema now creates `codigo_interno_seq` (item 2). Pending integration coverage for internal barcode generation and the real stock flow — add once the suite runs against a DB (item 8 Testcontainers work).
 
