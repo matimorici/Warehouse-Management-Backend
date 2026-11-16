@@ -395,6 +395,15 @@ public interface ReportRepository extends Repository<Product, Long> {
             @Param("from") LocalDateTime from,
             @Param("toExclusive") LocalDateTime toExclusive);
 
+    /**
+     * Qué trae: las bajas lógicas de usuario, producto, proveedor, ubicación, orden de compra y
+     * orden de retiro dentro del período, con entidad, id, descripción, fecha de baja, id del
+     * usuario que la hizo y su nombre completo (null si no quedó registrado).
+     * Cómo: SQL nativo con una CTE que hace {@code UNION ALL} de las seis tablas filtrando
+     * {@code fecha_baja IS NOT NULL} y el rango; luego {@code LEFT JOIN} a {@code usuario} para
+     * resolver el autor, filtra por {@code entidad} (o {@code 'TODAS'}) y ordena por fecha
+     * descendente con {@code LIMIT}.
+     */
     @Query(value = """
             WITH bajas AS (
                 SELECT CAST('USUARIO' AS VARCHAR) AS entidad,
