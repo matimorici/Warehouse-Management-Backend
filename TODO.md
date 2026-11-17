@@ -9,7 +9,7 @@ Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordad
 0. [X] **Preparación del terreno**
     - [X] Convertir `User.rol` de `String` a `enum Role { OPERARIO, ADMINISTRADOR }` con `@Enumerated(EnumType.STRING)`. No requiere migración de Flyway nueva: la columna sigue guardando el mismo texto (`"OPERARIO"`/`"ADMINISTRADOR"`), solo cambia cómo lo lee el código Java.
     - [X] Clasificar todos los endpoints por rol (ver tabla más abajo).
-    - [X] (Opcional, no bloquea el resto) mover credenciales hardcodeadas de `application.properties` a `.env` / variables de entorno — mismo ítem que el punto 9 de "High priority" en este archivo.
+    - [X] (Opcional, no bloquea el resto) mover credenciales de `application.properties` a variables de entorno (`${DB_USERNAME}`/`${DB_PASSWORD}`); los valores locales quedan en el `application-local.properties` ignorado — mismo ítem que el punto 9 de "High priority" en este archivo.
 1. [X] **`UserDetailsService`**: implementar sobre `UserRepository.findByCuil` → `UserDetails` con `username = cuil`, `password = contrasena` (ya es hash BCrypt), `authorities = ROLE_{rol}` (`OPERARIO` → `ROLE_OPERARIO`, `ADMINISTRADOR` → `ROLE_ADMINISTRADOR`).
 2. [X] **`DaoAuthenticationProvider`**: configurar con el bean `BCryptPasswordEncoder` ya existente en `SecurityConfig`, más el `UserDetailsService` del punto anterior. Exponer el bean `AuthenticationManager` (`AuthenticationConfiguration.getAuthenticationManager()`).
 3. [X] **Login con sesión** (reemplazar la lógica actual de `AuthController`): autenticar con `AuthenticationManager.authenticate()` y persistir el `SecurityContext` en la `HttpSession` vía `HttpSessionSecurityContextRepository`. Tras el login, el frontend recibe la cookie de sesión (`JSESSIONID`).
@@ -31,21 +31,14 @@ Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordad
 
 ## High priority
 
-1. [X] **`POST /api/usuarios/login` is unreachable** (AGENTS.md bug #13). `SecurityConfig` permits `/api/usuarios` (exact path) but not `/api/usuarios/login`, so login falls into `anyRequest().authenticated()` → 403. There is no auth mechanism, so the endpoint can never succeed. Fix: add `/api/usuarios/login` to the matcher or switch to `/api/usuarios/**`.
-   - **What I did:** the duplicate `/api/usuarios/login` endpoint was removed in item 5 (dedupe), so this bug is moot — login goes through the already-permitted `POST /api/auth/login`. A real security/auth mechanism is still pending (another team member); do not implement it until then.
-2. [X] **`codigo_interno_seq` missing from `wms_schema.sql`** (AGENTS.md bug #14). `ProductRepository.obtenerSiguienteSecuencia()` runs `nextval('codigo_interno_seq')`, but the schema script never creates the sequence. Creating a product with a blank barcode fails on a fresh DB, and no test can exercise internal barcode generation against a real schema.
-   - **What I did:** added `DROP SEQUENCE IF EXISTS codigo_interno_seq;` to the cleanup block (with the `DROP TABLE ... CASCADE` lines) and `CREATE SEQUENCE codigo_interno_seq;` above the `producto` section in `wms_schema.sql`.
-   - **Database change required — how to apply**: the schema script is the source of truth (`ddl-auto=validate`), so the sequence must exist in the running DB.
-     - *Fresh DB*: run the whole script as usual — `CREATE DATABASE wms_db; \c wms_db; \i wms_schema.sql`.
-     - *Existing DB with data*: do **NOT** re-run the whole script (its `DROP TABLE ... CASCADE` block wipes all tables). Apply just the sequence:
-       ```sql
-       CREATE SEQUENCE IF NOT EXISTS codigo_interno_seq;
-       ```
-       (to reset it: `DROP SEQUENCE IF EXISTS codigo_interno_seq; CREATE SEQUENCE codigo_interno_seq;`).
-     - No `ddl-auto` change needed: Hibernate validates tables only, not native-query sequences.
+1. [X] **`POST /api/usuarios/login` is unreachable** (AGENTS.md bug #13). `SecurityConfig` permits `/api/usuarios` (exact path) but not `/api/usuarios/login`, so login fell into `anyRequest().authenticated()` → 403.
+   - **What I did:** the duplicate `/api/usuarios/login` endpoint was removed in item 5 (dedupe); login goes through the permitted `POST /api/auth/login`. Session-based authentication was implemented later (see AGENTS.md Security); the old note about a pending auth mechanism is obsolete.
+2. [X] **`codigo_interno_seq` missing from `wms_schema.sql`** (AGENTS.md bug #14). `ProductRepository.obtenerSiguienteSecuencia()` runs `nextval('codigo_interno_seq')`, but the old schema script never created the sequence.
+   - **What I did:** the sequence was added to the legacy `wms_schema.sql` and later to `V1__create_schema.sql`; `V2__ensure_codigo_interno_seq.sql` repairs old baselined DBs.
+   - **Superseded by Flyway:** the source of truth is `src/main/resources/db/migration/`, not `wms_schema.sql`. Do not hand-run the old script or apply SQL manually; migrations run at startup.
    - Verify: start the app and `POST /api/productos` with blank `codigoBarras` → 201 with `codigoBarras: "INT-000001"`. Real-DB integration coverage is still pending (see Test infrastructure note).
-3. [X] **Orphan Stock rows on product delete** (AGENTS.md bug #1). `ProductService.deleteById` removed the `Product` but left the `Stock` row behind.
-   - **What I did:** `deleteById` is now `@Transactional`, deletes the `Stock` row first (via `stockRepository.findById(id).ifPresent(...)`, so products without a stock row still delete) and then the `Product`. Tests updated: `deleteById_deletesProductAndStock`, `deleteById_noStockRow_stillDeletesProduct`.
+3. [X] **Orphan Stock rows on product delete** (AGENTS.md bug #1). The original physical delete removed the `Product` but left the `Stock` row behind.
+   - **What I did (superseded by 1B):** product deletion is now logical; `ProductService.deleteById` sets `fechaBaja`/`idUsuarioBaja` and preserves the `Stock` row. The old physical-delete path no longer exists; see AGENTS.md business logic.
 4. [X] **No global exception handler** (AGENTS.md bug #7). No `@ControllerAdvice`. `IllegalArgumentException` (duplicate CUIL/CUIT/barcode) and `RuntimeException` ("X no encontrado") both surface as raw 500s.
    - **What I did:** added `exception/GlobalExceptionHandler` (`@ControllerAdvice`) mapping `InvalidCredentialsException` → 401, `IllegalArgumentException` → 400, `RuntimeException` → 500, all as `{ "error": message }`. Removed the redundant try/catch in both login controllers so 401s come from the advice. Added `ProductControllerTest` cases `create_duplicateBarcode_returns400` and `create_productNotFound_returns500`. Validation failures keep Spring's default 400 structure.
 
@@ -57,8 +50,8 @@ Delegada a otro integrante del grupo — **no implementarla acá**. Plan acordad
    - **What I did:** replaced the per-product `stockRepository.findById` with a single `stockRepository.findAll()` mapped by `idProducto` (no Product↔Stock JPA association exists, so an `@EntityGraph` can't fetch Stock). The list endpoint now runs exactly 2 queries (all products + all stock) instead of 1 + N. Updated `ProductServiceTest.findAll_includesStock` to stub `stockRepository.findAll()` and assert `findById` is never called.
 7. [X] **`PickOrderService.update` stale-data risk** (AGENTS.md bug #11). Lines are fetched twice after stock reversal; the second fetch may return stale rows. Fix by reusing the first fetch (e.g. `pickOrderLineRepository.deleteAll(oldLines)`) instead of re-querying.
    - **What I did:** `update` and `deleteById` now reuse the already-fetched line list and delete it with `pickOrderLineRepository.deleteAll(lines)` instead of calling `findByIdOrdenRetiro` a second time. Updated `PickOrderServiceTest.update_reversesOldLinesAndAppliesNewDeltas` and `deleteById_revertsStockAndDeletesLinesAndOrder` accordingly.
-8. **No auth flow / tests** (AGENTS.md bugs #9, #10, #12). The kept `WmsApplicationTests.contextLoads()` still hits real PostgreSQL — running the full `./mvnw test` requires a live DB, while the new service/controller tests are DB-free. Swap `contextLoads()` to Testcontainers `@ServiceConnection` (Docker is available) or a test profile so the whole suite runs without local PG.
-9. **Hardcoded DB credentials** in `application.properties` (user `postgres` / password `12345`). Move to env vars / placeholders (`${DB_USERNAME}`) so the repo is safe to share and CI can configure its own.
+8. **No test DB** (AGENTS.md bug #12). The kept `WmsApplicationTests.contextLoads()` still hits real PostgreSQL — running the full `./mvnw test` requires a live DB, while the new service/controller tests are DB-free. Auth flow is implemented (see AGENTS.md Security), so only the test DB remains. Swap `contextLoads()` to Testcontainers `@ServiceConnection` (Docker is available) or a test profile so the whole suite runs without local PG.
+9. [X] **DB credentials** in `application.properties` (user `postgres` / password `12345`). **Fixed:** the datasource uses `${DB_USERNAME}`/`${DB_PASSWORD}`; local values live in the ignored `application-local.properties`, and CI supplies its own env vars.
 
 ## Admin dashboards and reports (planned)
 
@@ -104,9 +97,9 @@ Build read-only reporting endpoints for the admin UI from the existing product, 
 
 - [X] **Seed admin migration (review point 5).** Added `V3__seed_admin_user.sql` inserting the default admin — CUIL `20-00000000-1`, password `Admin1234` (BCrypt hash `$2a$10$c0AJ/n5exC8DOpGCN3kdse.NfC08cFrUL0CmVw0MKSPhvAKcGWI.C`, verified with `BCryptPasswordEncoder.matches`), rol `ADMINISTRADOR`. Guarded with `WHERE NOT EXISTS` (no UNIQUE constraint on `usuario.cuil` at DB level). Every fresh clone now has a working login via `POST /api/auth/login`. Credentials documented in README.
 
-- [X] **Unmapped tables documented in V1 (review point 2).** `ubicacion`, `valoracion_proveedor`, `movimiento_fisico` have no JPA entities yet — noted in an inline comment in `V1__create_schema.sql` stating they're part of the full domain design, reserved for planned features (don't drop). **Update:** `orden_compra`/`linea_compra` now DO have entities (`PurchaseOrder`/`PurchaseOrderLine`, CRUD + receive/adjust-stock at `/api/ordenes-compra`); **`ubicacion`** now has `Location` (CRUD at `/api/ubicaciones`); **`valoracion_proveedor`** now has `SupplierRating` (CRUD + `?idSupplier=` filter at `/api/valoraciones-proveedor`); **`movimiento_fisico`** now has `PhysicalMovement` (append-only at `/api/movimientos-fisicos`). No JPA entity is left unmapped. The V1 comment is stale but must NOT be edited (applied migrations are immutable — checksum guard).
+- [X] **Unmapped tables documented in V1 (review point 2).** V1 originally documented `ubicacion`, `valoracion_proveedor`, `movimiento_fisico` as having no JPA entities yet. **Update:** all of them now have entities (`Location`, `SupplierRating`, `PhysicalMovement`), and `orden_compra`/`linea_compra` have `PurchaseOrder`/`PurchaseOrderLine`; no table is left unmapped. The V1 inline comment remains stale because applied migrations are immutable (checksum guard).
 
-- [X] **Docs for the review points (3 & 4).** (3) AGENTS.md business logic now notes the `stock` FK `ON DELETE CASCADE` makes the manual delete in `ProductService.deleteById` defensive belt-and-suspenders — keep. (4) README migrations section notes Flyway Community has no auto-rollback; recovery is a compensating `V<n+1>`.
+- [X] **Docs for the review points (3 & 4).** (3) The old `stock` FK `ON DELETE CASCADE` note referred to the former physical delete; product deletion is now logical (1B), so that manual delete path no longer exists. (4) README migrations section notes Flyway Community has no auto-rollback; recovery is a compensating `V<n+1>`.
 
 ## Baja lógica y reportes (feature en curso)
 
