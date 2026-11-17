@@ -46,7 +46,6 @@ Para desarrollo local por HTTP, el ejemplo ya trae `server.servlet.session.cooki
 ### 3. Ejecutar con el perfil `local`
 
 ```bash
-cd wms
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
