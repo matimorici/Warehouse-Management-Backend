@@ -23,8 +23,6 @@ Backend REST API para gestionar productos, proveedores, stock, ubicaciones y ór
 
 ## Puesta en marcha
 
-Todos los comandos `./mvnw` se ejecutan desde `wms/`.
-
 ### 1. Crear la base de datos
 
 Creá una base PostgreSQL llamada `wms_db`. Las tablas las crea Flyway al arrancar:
@@ -38,7 +36,7 @@ CREATE DATABASE wms_db;
 Desde la raíz del repo, copiá el archivo de ejemplo:
 
 ```bash
-cp wms/src/main/resources/application-local.properties.example wms/src/main/resources/application-local.properties
+cp src/main/resources/application-local.properties.example src/main/resources/application-local.properties
 ```
 
 Completá `DB_USERNAME` y `DB_PASSWORD` con tus credenciales de PostgreSQL. El archivo está en `.gitignore` y no se sube.
@@ -48,7 +46,6 @@ Para desarrollo local por HTTP, el ejemplo ya trae `server.servlet.session.cooki
 ### 3. Ejecutar con el perfil `local`
 
 ```bash
-cd wms
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
@@ -70,7 +67,7 @@ La migración `V3` crea el usuario `20-00000000-1` con contraseña `Admin1234` y
 
 ## Migraciones
 
-Flyway corre automáticamente al arrancar, antes que Hibernate, y aplica los scripts de `wms/src/main/resources/db/migration/`.
+Flyway corre automáticamente al arrancar, antes que Hibernate, y aplica los scripts de `src/main/resources/db/migration/`.
 Las migraciones ya aplicadas son inmutables; un cambio nuevo va en `V<n+1>__descripcion.sql`.
 No hay rollback automático: si una migración sale mal, se escribe una compensatoria `V<n+1>`.
 `ddl-auto=validate` queda como red de seguridad: Hibernate solo verifica que las entidades coincidan con el schema.
@@ -136,7 +133,7 @@ Todas las rutas están bajo `/api/`. CORS es global: permite el origen de `app.c
 | `DELETE` | `/api/ordenes-compra/{id}` | Baja lógica y revierte stock si fue recibida |
 | `POST` | `/api/movimientos-fisicos` | Registra un movimiento físico (append-only) |
 | `GET` | `/api/movimientos-fisicos` | Lista movimientos (append-only); filtros `?idProduct=`, `?idUser=`, `?from=&to=` |
-| `GET` | `/api/reportes/**` | Reportes de solo lectura (detalle en `wms/AGENTS.md`) |
+| `GET` | `/api/reportes/**` | Reportes de solo lectura (detalle en `AGENTS.md`) |
 
 - Si `codigoBarras` se omite o va vacío al crear un producto, se genera automáticamente con formato `INT-XXXXXX`.
 - Crear o actualizar una orden de retiro resta `cantidadDisponible` y suma `cantidadPendiente`; al darla de baja se revierte.
@@ -146,5 +143,5 @@ Todas las rutas están bajo `/api/`. CORS es global: permite el origen de `app.c
 
 ## Documentación adicional
 
-- `wms/AGENTS.md`: referencia técnica detallada (entidades, reglas de negocio, tests, seguridad y convenciones).
-- `wms/TODO.md`: backlog y pendientes del proyecto.
+- `AGENTS.md`: referencia técnica detallada (entidades, reglas de negocio, tests, seguridad y convenciones).
+- `TODO.md`: backlog y pendientes del proyecto.
